@@ -39,7 +39,7 @@
 #define GAP_B           69
 #define BLK_LEN         624     /* the block, then the image's filler: FORMAT's long block */
 #define SLOT            (GAP_A + HDR_LEN + GAP_B + BLK_LEN)
-#define TAPE            ((uint64_t)SECTORS * SLOT)
+#define SHORT_TAPE      8       /* blank slots at the image's end that make it a shorter loop */
 #define HDR_START       GAP_A
 #define BLK_START       (GAP_A + HDR_LEN + GAP_B)
 #define BURST_MAX       800
@@ -53,6 +53,7 @@ typedef struct {
     bool turning;
     uint64_t pos;                       /* tape position (byte-times) at clock_ref */
     uint64_t clock_ref;
+    uint64_t tape;                      /* the loop's length (byte-times) */
     uint32_t reads, writes;
 } drive_t;
 
@@ -110,7 +111,12 @@ static bool recorded(int d, int slot, int kind)
  */
 static int element(int d, uint64_t pos, int *slot, int *offset, uint64_t *start)
 {
-    uint64_t p = pos % TAPE;
+    if (s_drive[d].tape == 0) {
+        *slot = *offset = 0;
+        *start = 0;
+        return GAP;                             /* no cartridge yet */
+    }
+    uint64_t p = pos % s_drive[d].tape;
     *slot = p / SLOT;
     int o = p % SLOT;
     uint64_t slot_start = pos - o;
@@ -228,15 +234,15 @@ static void commit(void)
     drive_t *dr = &s_drive[d];
     if (n >= 16 && n < 40 && after[0] == 0xFF) {
         /* a sector header (FORMAT): the slot under the head */
-        int slot = (s_burst_pos % TAPE) / SLOT;
+        int slot = (s_burst_pos % dr->tape) / SLOT;
         uint8_t *rec = dr->image + slot * SECTOR_BYTES;
         memset(rec, 0, 10);
         rec[10] = rec[11] = 0xFF;
         memcpy(rec + 12, after, 16);
     } else if (n >= 4) {
         /* a block: the slot whose header passed last */
-        uint64_t p = s_burst_pos + TAPE - (HDR_START + HDR_LEN);
-        int slot = (p % TAPE) / SLOT;
+        uint64_t p = s_burst_pos + dr->tape - (HDR_START + HDR_LEN);
+        int slot = (p % dr->tape) / SLOT;
         uint8_t *rec = dr->image + slot * SECTOR_BYTES + HDR_LEN;
         memset(rec, 0, 10);
         rec[10] = rec[11] = 0xFF;
@@ -349,6 +355,44 @@ void ql_mdv_counts(uint32_t *reads, uint32_t *writes)
 
 /* ---- Cartridges ---- */
 
+/* The checksums of each slot's sector header and block header made right
+ * (low byte first, $0F0F + the record's bytes). Images prepared for the
+ * vDrive (the djw site's game cartridges) have them stale: the tool that
+ * put the files on wrote each block's file and block numbers but kept the
+ * free block's checksum, or renamed the medium without the headers'
+ * checksums; the vDrive works them out as it plays, QDOS rejects them
+ * here. The data's own checksums stay as they are (a damaged block stays
+ * damaged). The image changes in memory only, until the cartridge is
+ * written to.
+ */
+static int fix_checksums(uint8_t *img)
+{
+    int fixed = 0;
+    for (int s = 0; s < SECTORS; s++) {
+        uint8_t *r = img + s * SECTOR_BYTES;
+        struct { int from, len; } rec[2] = { { 12, 14 }, { 40, 2 } };
+        if (r[10] != 0xFF || r[11] != 0xFF || r[12] != 0xFF) {
+            continue;                               /* not a formatted slot */
+        }
+        for (int k = 0; k < 2; k++) {
+            if (k == 1 && (r[38] != 0xFF || r[39] != 0xFF)) {
+                continue;                           /* no block header */
+            }
+            uint16_t sum = 0x0F0F;
+            for (int i = 0; i < rec[k].len; i++) {
+                sum += r[rec[k].from + i];
+            }
+            uint8_t *c = r + rec[k].from + rec[k].len;
+            if (c[0] != (sum & 0xFF) || c[1] != (sum >> 8)) {
+                c[0] = sum & 0xFF;
+                c[1] = sum >> 8;
+                fixed++;
+            }
+        }
+    }
+    return fixed;
+}
+
 bool ql_mdv_insert(int drive, const char *path)
 {
     if (drive < 0 || drive >= QL_MDV_DRIVES) {
@@ -384,6 +428,29 @@ bool ql_mdv_insert(int drive, const char *path)
     snprintf(dr->path, sizeof(dr->path), "%s", path);
     dr->loaded = true;
     dr->dirty = false;
+    /* A recorded image whose end is blank is a shorter tape (the QLay
+     * format pads to 255 slots): the loop ends after its last recorded slot,
+     * as a real cartridge of that many sectors does, rather than playing a
+     * second of gap each turn (JS reads that as "bad or changed medium":
+     * Cavern from the djw vDrive page, 215 sectors). A blank cartridge
+     * stays a full loop of gap, for FORMAT.
+     */
+    int last = -1;
+    for (int s = 0; s < SECTORS; s++) {
+        const uint8_t *r = dr->image + s * SECTOR_BYTES;
+        if (r[10] == 0xFF && r[11] == 0xFF && r[12] == 0xFF) {
+            last = s;
+        }
+    }
+    int slots = last >= 0 && SECTORS - 1 - last >= SHORT_TAPE ? last + 1 : SECTORS;
+    dr->tape = (uint64_t)slots * SLOT;
+    if (slots < SECTORS) {
+        QL_LOGI("%s: a tape of %d slots (the rest of the image is blank)", path, slots);
+    }
+    int fixed = fix_checksums(dr->image);
+    if (fixed) {
+        QL_LOGI("%s: %d header checksums put right (an image made for the vDrive?)", path, fixed);
+    }
     return true;
 }
 

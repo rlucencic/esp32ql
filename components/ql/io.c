@@ -20,6 +20,7 @@
  *   $18063 write    the ZX8301's MODE (video.c)
  */
 #include <string.h>
+#include <stdlib.h>
 #include <time.h>
 #include "m68k.h"
 #include "ql_internal.h"
@@ -46,9 +47,31 @@ void ql_io_reset(void)
     ql_mdv_reset();
 }
 
+#ifndef ESP_PLATFORM
+/* The host runs far faster than real time: its clock counts the emulated
+ * time from the moment it started (QL_TIME: a given start, seconds since
+ * 1970), so DATE-timed programs (benchmarks) measure the QL, and runs repeat
+ */
+static uint32_t host_start;
+
+static uint32_t now_seconds(void)
+{
+    if (host_start == 0) {
+        const char *t = getenv("QL_TIME");
+        host_start = t ? (uint32_t)strtoul(t, NULL, 10) : (uint32_t)time(NULL);
+    }
+    return host_start + (uint32_t)(ql_clock() / QL_CPU_HZ);
+}
+#else
+static uint32_t now_seconds(void)
+{
+    return (uint32_t)time(NULL);
+}
+#endif
+
 static uint32_t rtc(void)
 {
-    return (uint32_t)time(NULL) + RTC_1961 + s_rtc_offset;
+    return now_seconds() + RTC_1961 + s_rtc_offset;
 }
 
 int32_t ql_rtc_offset(void)

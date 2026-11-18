@@ -24,16 +24,16 @@
   <img alt="Psion Quill 2.35 on the Tab5, booted from a 720 KB floppy disk image through the Trump Card, a sentence typed" src="docs/images/tab5-quill-floppy.png" width="49%">
   <img alt="The MaTouch starting with a Trump Card: Miracle Systems V1.31, Trump Card 640K RAM, CARE/QJUMP TK2.23, above the F1/F2 prompt" src="docs/images/matouch-trumpcard.png" width="49%">
   <br>
-  <img alt="SuperBASIC in mode 8 on the Tab5: a FOR loop drawing 70 circles in the seven inks" src="docs/images/tab5-basic-circles.png" width="49%">
+  <img alt="Pacman on the Tab5, from a freeware game cartridge: the maze in blue and red, the ghosts, Press any key to start" src="docs/images/tab5-pacman.png" width="49%">
   <img alt="The setup screen on the Tab5: ROM JS or Minerva, Memory 128 KB or 640 KB, Floppy None or Trump Card, Sound" src="docs/images/tab5-setup.png" width="49%">
   <br>
   <img alt="Psion Quill 2.35 on the Tab5, loaded from a Microdrive cartridge image: a document typed and saved, Quill asking Same document?" src="docs/images/tab5-quill-saved.png" width="49%">
-  <img alt="SuperBASIC on the MaTouch: PRINT 2+2 typed in the command window, 4 in the output window" src="docs/images/matouch-basic-print.png" width="49%">
+  <img alt="Psion Abacus on the MaTouch, loaded from a floppy disk: 12 and 30 in A1 and A2, A3 holding A1+A2*2 = 72" src="docs/images/matouch-abacus.png" width="49%">
   <br>
   <sub>Psion Quill 2.35 booted from a floppy disk on the Tab5; the MaTouch starting with a Trump
-  Card; SuperBASIC drawing circles in mode 8 (256 × 256, eight colours); the setup screen; Quill
-  from a Microdrive cartridge, a document just saved back to it; PRINT 2+2 on the MaTouch.
-  Screenshots from the boards.</sub>
+  Card; Pacman from a freeware game cartridge (mode 8, 256 × 256, eight colours); the setup
+  screen; Quill from a Microdrive cartridge, a document just saved back to it; Psion Abacus from a
+  floppy disk on the MaTouch. Screenshots from the boards.</sub>
 </p>
 
 esp32ql turns the Makerfabs MaTouch ESP32-S3 Parallel TFT with Touch 7", or an
@@ -101,6 +101,11 @@ core (Musashi) this one shares with the ST, the Macs and the Amiga.
   card boots `flp1_boot`: Quill copied from its cartridge boots from a disk
   in a few seconds. Written disks go back to the card two seconds after
   the last write.
+- **Original software**: Psion Quill, Abacus, Archive and Easel from
+  cartridges and floppy disks; the djw site's 29 freeware game cartridges
+  (Pacman, Space Invaders, Psion Chess, Q-Bert, M-Cosmic, Cavern, ...) all
+  run. Images prepared for the vDrive (whose header checksums are stale,
+  and some with a blank stretch at the end) are put right as they go in.
 - **QL software from the web page**: drop QL files, folders or zips on it
   and they go onto a new cartridge (when they fit) and a new 720 KB floppy
   disk, made in the browser and uploaded; executables keep their QDOS
@@ -108,8 +113,8 @@ core (Musashi) this one shares with the ST, the Macs and the Amiga.
   fields. `tools/mdvtool.py` does the same for a cartridge on the PC;
   `tools/mdvcheck.py` checks one.
 
-**Next**, in order: the keyboard by hand (Bluetooth and USB), more
-original software, timing (the ZX8301's contention).
+**Next**, in order: the keyboard by hand (Bluetooth and USB), timing (the
+ZX8301's contention: QSBB runs 30-45% faster than on a QL).
 
 ## Hardware
 

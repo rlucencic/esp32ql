@@ -177,6 +177,11 @@ Memory 253, Floppy 313 (x 341, 626).
   head (FORMAT), a long one the block of the slot whose header passed last.
   The gap interrupt: as a gap starts, and when its mask is written as 1
   during a gap (docs 3.2: the JS ROM needs it with an empty drive).
+  At insert (`ql_mdv_insert()`): each slot's sector-header and block-header
+  checksums are put right (images made for the vDrive have them stale;
+  the data's own stay as they are), and an image whose last 8 or more
+  slots are blank is a shorter tape: the loop ends after its last
+  recorded slot (the log says so).
   $18021's top bits on read (Minerva's inc/pc; JS ignores them): bit 7
   the transmit baud clock ($18002's rate), up and down once a bit; bit 6
   1 unless a Microdrive turns; bit 5 a 65536 Hz count's lowest bit.
@@ -328,6 +333,18 @@ Memory 253, Floppy 313 (x 341, 626).
   into Quill: the first "beeping" load and profile were of a silent
   machine. Empty the drives through the web API first (`curl -X DELETE
   .../api/drive/1`), and put them back.
+- **Cartridges made for the vDrive have stale header checksums**: the
+  djw site's game images (Andrei Tenu's, Neal Card's) hold each block's
+  file and block numbers with the free block's checksum ($100C) or the
+  map's ($1007 for $F8), and Tenu's renamed media keep the old name's
+  header checksums; only the 512 bytes' own are right. The vDrive works
+  them out as it plays; QDOS here rejected the sectors and sat in its
+  Microdrive code (PC $5440) for good. Put right at insert now: 19 of the
+  29 then ran from their boot, the rest by name.
+- **A long blank stretch reads as "bad or changed medium"**: Cavern has
+  215 sectors and 40 blank slots after them, played as 1.3 s of gap a
+  turn; a real cartridge of 215 sectors is a shorter loop. The JS ROM
+  gave "bad or changed medium" on every read. Shorter loop now.
 - **The page dropped a zip's extra fields**: the QL's zips keep each
   file's QDOS header there, so an executable from a zip lost its type and
   data space on the way to the packer (Quill would have become a data
@@ -366,6 +383,29 @@ Memory 253, Floppy 313 (x 341, 626).
   `QL_FLP_LOG=1` prints each WD1772 command and the IDs a Write Track
   writes. Quill on a disk: `TK2_EXT`, `WCOPY mdv1_ TO flp1_`, `A`; its boot
   needs `FLP_USE mdv` first, or its line 8 as `EXEC_W flp1_quill`.
+- Original software (2026-11-18): Psion Quill, Abacus, Archive and Easel
+  (the djw Psion page's `*m.zip`, packed with the page's packer: a
+  cartridge and a disk each; on the disks the boot's `mdv1_` made
+  `flp1_`) all start; Abacus computes (12, 30, A1+A2*2 = 72), Easel draws
+  typed values, Archive opens its GAZET (`open "mdv1_gazet"`, `display`:
+  Afghanistan). The djw vDrive page's 29 game cartridges: all run on the
+  host (JS, 128 KB): 19 from their boot (Psion Chess, Pacman, Space
+  Invaders, Zapman, Pudge, ...), Andrei Tenu's by name (`LRUN
+  mdv1_cavern_boot`, `ASSAULT_boot`, `cos_boot`, `Packman_boot` (M-Crunch),
+  `treasure_boot`, `met_boot`, `SPEED_boot`, `spook_boot`, `qbert_boot`),
+  Cavern with Toolkit 2 (ALCHP: the Trump Card and `TK2_EXT`), the Q-Berts
+  asking DEVICE? (mdv1_) and GAMESPEED?. Pacman on the Tab5 (100%, core 1
+  22%), Abacus from its disk on the MaTouch (100%). All on both boards'
+  cards (`ql/`; the Q-Bert of Neal Card's set as `Qbert2.mdv`: the names
+  differ only in case). The djw site's `.mdv` and `.img` downloads answer
+  HTTP 500; its zips work.
+- QSBB (the QLay SuperBASIC benchmark, djw benchmark page; 3 tests of 20
+  s by DATE): host JS 1300 / 1220 / 1600 (printing, functions, strings),
+  Minerva 1320 / 1360 / 1860; the Tab5 in real time 1260 / 1220 / 1580. An
+  original QL: 980 / 840 / 1100 (a QL Forum post, seen through a search:
+  the forum refuses fetching): 30-45% fast without the ZX8301's
+  contention (TODO). The host's clock counts emulated time now (`QL_TIME`
+  its start), so DATE-timed programs measure the QL there too.
 - The keyboard test: `tools/keytest.bas` as a file named `boot`, packed
   with the web page's packer (`node -e` with `main/web/qlfiles.js`, or
   dropped on the page) into `keytest.mdv`/`.img`: in FLP1_ (with the Trump

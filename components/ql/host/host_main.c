@@ -16,6 +16,7 @@
  *   QL_TYPE=<frame>:<text>[|...]  type text from that frame (\n is ENTER)
  *   QL_KEYS=<frame>:<key>:<0|1>[;...]  matrix keys down or up
  *   QL_MDV1, QL_MDV2       cartridge images (written: use copies)
+ *   QL_TIME=<s>           the clock's start (seconds since 1970; it counts emulated time)
  *   QL_RTC_OFFSET=<s>      the clock's offset from the host's time (printed at the end)
  *   QL_TRUMP=<rom>         a Trump Card with that ROM (floppy disks, Toolkit 2)
  *   QL_FLP1, QL_FLP2       its disk images (written: use copies)
