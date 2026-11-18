@@ -22,12 +22,25 @@
  * the 68008 moves a word as two byte cycles, so a word access costs 4
  * clocks more and a long one 8 (taken from Musashi's remaining cycles: the
  * instruction lasts longer).
+ *
+ * The ZX8301's contention (docs/ql-hardware.md 2.5): it owns the on-board
+ * RAM's bus ($20000-$3FFFF, all of it, not only the screen) and reads the
+ * screen in chunks of 12 CPU clocks, 40 a line; in a chunk it reads in, the
+ * CPU gets one byte access, in a free one three. So a byte access to that
+ * RAM in a busy chunk costs 12 clocks instead of 4 (RAM-bound code gets 56
+ * accesses a picture line of 120: Nasta's figure). Busy: 32 chunks of a
+ * picture line, 8 of the others (the refresh: MiSTer's and sQLux's model,
+ * timed on a QL; Nasta has 32 there too). Where the CPU is in the line:
+ * the instruction's start plus the waits already charged in it (Musashi
+ * charges an instruction's clocks after it). ROM, the I/O and expansion
+ * RAM run at full speed.
  */
 #include <string.h>
 #include "m68k.h"
 #include "ql_internal.h"
 
 extern int m68ki_remaining_cycles;
+extern int m68ki_initial_cycles;
 
 #define BYTE_CYCLE      4
 #define WAIT(n)         (m68ki_remaining_cycles -= (n))
@@ -137,25 +150,51 @@ void ql_poke8(uint32_t a, uint8_t v)
 
 /* ---- Musashi callbacks ---- */
 
+#define CHUNK           12      /* CPU clocks: 24 of the ZX8301's */
+#define CONTENDED       8       /* a byte access in a busy chunk: 12 clocks, not 4 */
+
+/* bytes accesses to address a: in the on-board RAM, each waits if the
+ * ZX8301 is reading a chunk of the screen where the CPU is in the line
+ */
+static inline void contend(uint32_t a, int bytes)
+{
+    if (((a & QL_ADDR_MASK) >> QL_PAGE_SHIFT) - (0x20000 >> QL_PAGE_SHIFT) >= (0x20000 >> QL_PAGE_SHIFT)) {
+        return;
+    }
+    for (int i = 0; i < bytes; i++) {
+        int pos = ql.cycle_in_line + (m68ki_initial_cycles - m68ki_remaining_cycles);
+        if (pos >= QL_LINE_CYCLES) {
+            pos -= QL_LINE_CYCLES;              /* (into the next line: about the same) */
+        }
+        if (pos / CHUNK < ql.busy_chunks) {
+            WAIT(CONTENDED);
+        }
+    }
+}
+
 unsigned int QL_HOT m68k_read_memory_8(unsigned int a)
 {
+    contend(a, 1);
     return read8(a);
 }
 
 unsigned int QL_HOT m68k_read_memory_16(unsigned int a)
 {
     WAIT(BYTE_CYCLE);
+    contend(a, 2);
     return (read8(a) << 8) | read8(a + 1);
 }
 
 unsigned int QL_HOT m68k_read_memory_32(unsigned int a)
 {
     WAIT(2 * BYTE_CYCLE);
+    contend(a, 4);
     return ((uint32_t)read8(a) << 24) | (read8(a + 1) << 16) | (read8(a + 2) << 8) | read8(a + 3);
 }
 
 void QL_HOT m68k_write_memory_8(unsigned int a, unsigned int v)
 {
+    contend(a, 1);
     write8(a, v);
     screen_write(a);
 }
@@ -163,6 +202,7 @@ void QL_HOT m68k_write_memory_8(unsigned int a, unsigned int v)
 void QL_HOT m68k_write_memory_16(unsigned int a, unsigned int v)
 {
     WAIT(BYTE_CYCLE);
+    contend(a, 2);
     write8(a, v >> 8);
     write8(a + 1, v);
     screen_write(a);
@@ -171,6 +211,7 @@ void QL_HOT m68k_write_memory_16(unsigned int a, unsigned int v)
 void QL_HOT m68k_write_memory_32(unsigned int a, unsigned int v)
 {
     WAIT(2 * BYTE_CYCLE);
+    contend(a, 4);
     write8(a, v >> 24);
     write8(a + 1, v >> 16);
     write8(a + 2, v >> 8);

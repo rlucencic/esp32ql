@@ -186,6 +186,8 @@ void ql_run_frame(void)
 {
     ql_io_frame();
     for (ql.line = 0; ql.line < QL_LINES;) {
+        ql.busy_chunks = ql.line >= QL_FIRST_LINE && ql.line < QL_FIRST_LINE + QL_SCREEN_HEIGHT ? QL_BUSY_PICTURE
+                                                                                            : QL_BUSY_BLANK;
         run_cycles(QL_LINE_CYCLES);
         /* the overshoot counts from the next line's start: the line's end
          * is the next one's start (ql_now() stays right in ql_io_line())

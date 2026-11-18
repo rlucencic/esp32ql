@@ -230,7 +230,11 @@ slots a line) [Nasta 524-528].
 | MAME (approximation) | 32: a flat 8 CPU clocks lost per RAM access | 0 | MAME zx8301.h `CONTENDED_CYCLES_LOST`, `is_owning_bus()` |
 
 [UNCERTAIN: the two hardware-based sources disagree on the lines
-outside the picture.] sQLux's finer rules: in a busy chunk the CPU can
+outside the picture.] In the emulator (2026-11-18), charged per byte access (12
+clocks in a busy chunk): QSBB on JS with 128 KB came to 1020 / 900 /
+1220 with 8 busy chunks outside the picture and 960 / 840 / 1160 with 32,
+against an original QL's 980 / 840 / 1100 (a QL Forum post): Nasta's 32
+fit. sQLux's finer rules: in a busy chunk the CPU can
 only start a RAM access at the chunk's first cycle (at most one byte
 every 12 clocks); a read costs no wait if the RAM is free, a write
 always at least one wait state (DS comes a cycle later on writes)

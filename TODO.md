@@ -13,8 +13,4 @@ checked) and leaves this list.
    CTRL+SPACE broke it; no findings reported yet. KEYROW's row 7
    (SHIFT, CTRL, ALT in bits 0-2) agrees with the manual's table and
    MAME's on the host.
-2. **Timing**: the ZX8301's contention for the internal RAM. QSBB (the
-   djw benchmark page) runs 30-45% fast: JS 1300 / 1220 / 1600 against an
-   original QL's 980 / 840 / 1100 (CLAUDE.md, Testing); the contention's
-   rules in docs/ql-hardware.md 2.5 (sources disagree outside the picture).
-3. **The serial ports and the network**: later, if wanted.
+2. **The serial ports and the network**: later, if wanted.

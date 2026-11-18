@@ -65,7 +65,10 @@ core (Musashi) this one shares with the ST, the Macs and the Amiga.
 **Working**
 - The 68008: Musashi's 68000 with the QL's 8-bit bus (a word costs two byte
   cycles), 20 address lines, 7.5 MHz, a 50 Hz PAL frame of 312 lines.
-- Memory: the 48 KB ROM, 128 KB RAM, or 640 KB with a 512 KB expansion.
+- Memory: the 48 KB ROM, 128 KB RAM, or 640 KB with a 512 KB expansion;
+  the ZX8301's contention (the screen's reads hold up the CPU's accesses to
+  the on-board RAM), so programs run at a QL's speed: the QLay SuperBASIC
+  benchmark gives 940 / 840 / 1160 on the Tab5, a QL 980 / 840 / 1100.
 - The ZX8301's display: mode 4 (512 × 256, four colours) and mode 8 (256 ×
   256, eight colours, flashing), the two screen banks, blanking.
 - The ZX8302's interrupts (frame, gap, interface, with their masks), its
@@ -113,8 +116,8 @@ core (Musashi) this one shares with the ST, the Macs and the Amiga.
   fields. `tools/mdvtool.py` does the same for a cartridge on the PC;
   `tools/mdvcheck.py` checks one.
 
-**Next**, in order: the keyboard by hand (Bluetooth and USB), timing (the
-ZX8301's contention: QSBB runs 30-45% faster than on a QL).
+**Next**, in order: the keyboard by hand (Bluetooth and USB), the serial
+ports and the network if wanted.
 
 ## Hardware
 

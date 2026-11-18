@@ -101,7 +101,13 @@ Memory 253, Floppy 313 (x 341, 626).
   writes). Bytes in the
   68008's order. A word access costs 4 clocks more than Musashi counts, a
   long 8 (the 68008's second byte cycle), taken from Musashi's remaining
-  cycles. No ZX8301 contention yet.
+  cycles. The ZX8301's contention: a byte access to the on-board RAM
+  ($20000-$3FFFF, all of it) in a chunk (12 clocks, 40 a line) the screen
+  reads in costs 12 clocks, not 4; busy are 32 chunks of every line
+  (`QL_BUSY_PICTURE`, `QL_BUSY_BLANK`: Nasta's logic analyser has the
+  refresh in the same slots outside the picture; the emulators' 8 there
+  made QSBB 4-11% fast, 32 makes it 0-5%). Where the CPU is in the line:
+  the instruction's start plus the waits charged in it.
 - **Display** (`video.c`): mode 4: a word is 8 pixels, the even byte green,
   the odd byte red (black, red, green, white); mode 8: a word is 4 pixels,
   G F pairs and R B pairs, F toggling flashing to the line's end (the flash
@@ -341,6 +347,12 @@ Memory 253, Floppy 313 (x 341, 626).
   them out as it plays; QDOS here rejected the sectors and sat in its
   Microdrive code (PC $5440) for good. Put right at insert now: 19 of the
   29 then ran from their boot, the rest by name.
+- **Without the ZX8301's contention the QL ran 30-45% fast**: QSBB
+  1300 / 1220 / 1600 against a QL's 980 / 840 / 1100. The screen reads
+  hold up every access to the on-board RAM, where a 128 KB QL keeps
+  everything but the ROM. Charged per byte (12 clocks in a busy chunk),
+  with Nasta's 32 busy chunks on every line, QSBB comes within 0-5%.
+  JS FORMAT then gives 231/253 sectors (230/251 before), Minerva 231/235.
 - **A long blank stretch reads as "bad or changed medium"**: Cavern has
   215 sectors and 40 blank slots after them, played as 1.3 s of gap a
   turn; a real cartridge of 215 sectors is a shorter loop. The JS ROM
@@ -363,15 +375,15 @@ Memory 253, Floppy 313 (x 341, 626).
 
 - Host: `make -C components/ql/host run` (the JS ROM, 500 frames): the
   F1/F2 screen. `QL_LOG=50` shows the PC each 50 frames. SuperBASIC:
-  `QL_KEYS="150:57:1;155:57:0" QL_TYPE='500:PRINT 2+2\n'
-  ./build/ql_host <rom> 900 out.ppm` (F1 at frame 150): 4 in #1; the same
+  `QL_KEYS="250:57:1;255:57:0" QL_TYPE='500:PRINT 2+2\n'
+  ./build/ql_host <rom> 900 out.ppm` (F1 at frame 250, after the prompt appears): 4 in #1; the same
   with minerva.rom (its start screen shows the clock's date and time).
 - Boards (2026-11-18): the JS ROM to its F1/F2 screen at 100% on both (Tab5
   core 1 ~21%, MaTouch ~64%); F1 and `PRINT 2+2` (console `k 57`, `T`) on
   both: 4; SuperBASIC's circles in mode 8 on the Tab5 (the README's
   picture). Not yet by hand with a Bluetooth or USB keyboard.
 - Microdrives on the host: `head -c 174930 /dev/zero > blank.mdv`,
-  `QL_MDV1=blank.mdv QL_KEYS="150:57:1;155:57:0" QL_TYPE='600:FORMAT
+  `QL_MDV1=blank.mdv QL_KEYS="250:57:1;255:57:0" QL_TYPE='600:FORMAT
   mdv1_test\n'` (3000 frames), then `tools/mdvcheck.py blank.mdv`. Quill:
   a cartridge from `qui235m.zip` (`tools/mdvtool.py add <formatted>.mdv
   qui235m.zip`) in MDV1_, F1: Quill's editor by frame ~2000; F3 then S
@@ -400,12 +412,16 @@ Memory 253, Floppy 313 (x 341, 626).
   differ only in case). The djw site's `.mdv` and `.img` downloads answer
   HTTP 500; its zips work.
 - QSBB (the QLay SuperBASIC benchmark, djw benchmark page; 3 tests of 20
-  s by DATE): host JS 1300 / 1220 / 1600 (printing, functions, strings),
-  Minerva 1320 / 1360 / 1860; the Tab5 in real time 1260 / 1220 / 1580. An
-  original QL: 980 / 840 / 1100 (a QL Forum post, seen through a search:
-  the forum refuses fetching): 30-45% fast without the ZX8301's
-  contention (TODO). The host's clock counts emulated time now (`QL_TIME`
-  its start), so DATE-timed programs measure the QL there too.
+  s by DATE; printing, functions, strings) against an original QL's 980 /
+  840 / 1100 (a QL Forum post, seen through a search: the forum refuses
+  fetching). Without the ZX8301's contention: JS 1300 / 1220 / 1600 (30-45%
+  fast). With it (JS, 128 KB): the host 960 / 840 / 1160, the Tab5 in
+  real time 940 / 840 / 1160 (core 1 25%); 640 KB on the MaTouch 1040 /
+  1180 / 1500 (BASIC's data in the expansion RAM, which isn't contended:
+  expanded QLs ran faster; core 1 71%, 100%). The host's clock counts
+  emulated time (`QL_TIME` its start), so DATE-timed programs measure the
+  QL there too. The prompt comes later with the contention (the RAM
+  test): F1 at frame 250 with 128 KB, ~550 with 640 KB.
 - The keyboard test: `tools/keytest.bas` as a file named `boot`, packed
   with the web page's packer (`node -e` with `main/web/qlfiles.js`, or
   dropped on the page) into `keytest.mdv`/`.img`: in FLP1_ (with the Trump

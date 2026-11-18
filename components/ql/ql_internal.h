@@ -22,6 +22,8 @@
 #define QL_LINE_CYCLES      480         /* 64 us */
 #define QL_LINES            312         /* a PAL frame: 149760 clocks, 50.08 Hz */
 #define QL_FIRST_LINE       40          /* the first of the 256 displayed lines */
+#define QL_BUSY_PICTURE     32          /* the ZX8301's busy chunks (of 40) on a picture line */
+#define QL_BUSY_BLANK       32          /* ... on the others (its refresh) */
 
 /* ---- Memory: 64 pages of 16 KB over the 68008's 1 MB ---- */
 #define QL_PAGE_SHIFT       14
@@ -51,6 +53,7 @@ typedef struct {
     int irq_level;
 
     /* ZX8301 */
+    int busy_chunks;                /* this line's chunks the screen reads take (mem.c) */
     uint8_t mode;                   /* MODE register ($18063) */
     bool screen_dirty;              /* the displayed screen written this frame */
 } ql_t;
