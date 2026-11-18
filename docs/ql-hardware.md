@@ -44,7 +44,8 @@ Contents
 7. [QDOS boot (JS) and Minerva](#7-qdos-boot-js-rom-and-minerva)
 8. [68008 timing](#8-68008-timing)
 9. [Software to test with](#9-software-to-test-with)
-10. [Sources](#sources)
+10. [Floppy disks: the Trump Card](#10-floppy-disks-the-trump-card)
+11. [Sources](#sources)
 
 ---
 
@@ -1390,6 +1391,39 @@ QL users", Psion keeps the copyright).
   `KEYROW`, `MODE 8`, `FLASH`).
 
 ---
+
+## 10. Floppy disks: the Trump Card
+
+Added 2026-11-18, after the rest. QL disk interfaces: Sinclair's/Micro
+Peripherals' (device FDK1_), Sandy's SuperQBoard and the Miracle Trump
+Card and Gold Card (QJump's driver: FLP1_), 720 KB double-density the
+common format (the Gold Card adds 1.44 and 3.2 MB). The emulator has the
+Trump Card: its ROM is on the djw ROM page (`trumpcard131.zip`, V1.31,
+32 KB, CRC32 584c7835, MAME's default) and MAME's `trumpcard.cpp`
+(BSD-3-Clause) gives its map [one source; the ROM's behaviour agrees]:
+
+- ROM at $10000-$17FFF. Any read of $0C000-$0FFFF (QDOS's probe of the
+  ROM port) makes it appear at $C0000-$C7FFF too, where QDOS finds its
+  $4AFB0001 header and runs its initialisation; any read of
+  $10000-$17FFF hides it there again (its code then runs at $10000).
+- RAM from $40000 (256, 512 or 768 KB).
+- A WD1772 at $1C000-$1C003 (status/command, track, sector, data), 8 MHz,
+  double density; no interrupt line: the driver polls busy and DRQ.
+- A write-only latch at $1E000: bit 0 the second drive, bit 1 the first,
+  bit 2 the motor, bit 3 the side.
+
+What the V1.31 ROM does with it [derived: `QL_FLP_LOG`, `QL_DASM`]:
+restore and seek with verify; read sector ($88) and write sector ($AA) one
+at a time; Write Track ($FA) with 10 IDs a track (the tenth's data doesn't
+fit: 9 sectors of 512 stored, interleave 1); it tells one side from two by
+formatting side 1 of track 0 with IDs saying track 1, then side 0, then a
+Read Address ($C8) on side 1 whose bytes it never reads: when busy drops
+it takes the ID's track from the sector register (1: two sides). A write
+sector to sector 255 forced off at once (a delay or a head load, it
+seems). Toolkit 2's commands are linked by `TK2_EXT`; `FLP_USE mdv` makes
+the floppy driver answer to MDV. With a disk in FLP1_ the card boots
+`flp1_boot`, else `mdv1_boot`. QDOS's floppy format: 1440 sectors, the
+map in sector 0 ("QL5A" and the medium name at its start).
 
 ## Sources
 

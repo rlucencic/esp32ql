@@ -125,6 +125,7 @@ bool ql_init(const ql_config_t *config)
     ql.ram = config->ram;
     ql.ram_size = config->ram_size;
     ql.ram_end = QL_RAM_BASE + config->ram_size;
+    ql.trump_rom = config->trump_rom;
     ql_mem_init();
     ql_video_init();
 
@@ -136,7 +137,7 @@ bool ql_init(const ql_config_t *config)
     m68k_set_int_ack_callback(int_ack);
     m68k_set_reset_instr_callback(reset_instruction);
 
-    QL_LOGI("%lu KB RAM", (unsigned long)(ql.ram_size / 1024));
+    QL_LOGI("%lu KB RAM%s", (unsigned long)(ql.ram_size / 1024), ql.trump_rom ? ", a Trump Card" : "");
     ql_reset();
     emudbg_set_machine(&s_dbg);
     return true;
@@ -152,8 +153,10 @@ void ql_reset(void)
     ql.halted = false;
     ql.irq_level = 0;
     ql.screen_dirty = true;
+    ql_mem_reset();
     ql_video_reset();
     ql_io_reset();
+    ql_flp_reset();
     m68k_set_irq(0);
     m68k_pulse_reset();
 }
@@ -205,4 +208,5 @@ void ql_get_status(ql_status_t *status)
     status->mode = ql.mode;
     status->mdv_motor = ql_mdv_motor();
     ql_mdv_counts(status->mdv_reads, status->mdv_writes);
+    ql_flp_status(&status->flp_light, status->flp_track, status->flp_reads, status->flp_writes);
 }

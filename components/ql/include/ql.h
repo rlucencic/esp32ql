@@ -28,6 +28,9 @@
 #define QL_AUDIO_HZ             31250
 
 #define QL_MDV_DRIVES           2
+#define QL_FLP_DRIVES           2
+#define QL_FLP_IMAGE_SIZE       (80 * 2 * 9 * 512)  /* a 720 KB disk */
+#define QL_TRUMP_ROM_SIZE       (32 * 1024)
 
 typedef struct {
     const uint8_t *rom;         /* QL_ROM_SIZE bytes */
@@ -37,6 +40,10 @@ typedef struct {
      * faster memory (NULL: the built-in ones)
      */
     void *opcode_tables;
+    /* The Miracle Trump Card's ROM (QL_TRUMP_ROM_SIZE bytes): its floppy
+     * disk interface and Toolkit 2; NULL: no disk interface
+     */
+    const uint8_t *trump_rom;
 } ql_config_t;
 
 bool ql_init(const ql_config_t *config);
@@ -84,6 +91,19 @@ bool ql_mdv_create(const char *path);       /* a blank, unformatted cartridge */
 bool ql_mdv_dirty(void);                    /* written since the last flush */
 void ql_mdv_flush(void);                    /* written cartridges to their files */
 
+/* ---- Floppy disks on the Trump Card: raw sector images (drive 0 is FLP1_) ----
+ *
+ * 720 KB (80 tracks, 2 sides, 9 sectors of 512 bytes, side 0 then 1 for each
+ * track), also 360 KB (40 tracks) and 800 KB (10 sectors)
+ */
+bool ql_flp_insert(int drive, const char *path);
+void ql_flp_eject(int drive);
+const char *ql_flp_path(int drive);
+bool ql_flp_write_protected(int drive);
+bool ql_flp_create(const char *path);       /* a blank 720 KB disk, for FORMAT */
+bool ql_flp_dirty(void);
+void ql_flp_flush(void);
+
 /* ---- Status ---- */
 typedef struct {
     uint32_t frames;
@@ -92,6 +112,9 @@ typedef struct {
     uint8_t mode;               /* the ZX8301's MODE register */
     uint8_t mdv_motor;          /* the drive turning (1, 2), 0 none */
     uint32_t mdv_reads[QL_MDV_DRIVES], mdv_writes[QL_MDV_DRIVES];
+    uint8_t flp_light;          /* the floppy drive busy (1, 2), 0 none */
+    uint8_t flp_track[QL_FLP_DRIVES];
+    uint32_t flp_reads[QL_FLP_DRIVES], flp_writes[QL_FLP_DRIVES];  /* sectors, tracks formatted */
 } ql_status_t;
 
 void ql_get_status(ql_status_t *status);

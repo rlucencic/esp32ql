@@ -13,17 +13,21 @@ void settings_load(void)
 {
     settings.rom = ROM_JS;
     settings.memory = 0;
+    settings.floppy = 1;
 
     nvs_handle_t h;
     if (nvs_open(NAMESPACE, NVS_READONLY, &h) != ESP_OK) {
         return;
     }
     uint8_t u8;
-    if (nvs_get_u8(h, "rom", &u8) == ESP_OK && u8 < ROM_COUNT) {
+    if (nvs_get_u8(h, "rom", &u8) == ESP_OK && u8 <= ROM_MINERVA) {
         settings.rom = u8;
     }
     if (nvs_get_u8(h, "memory", &u8) == ESP_OK && u8 <= 1) {
         settings.memory = u8;
+    }
+    if (nvs_get_u8(h, "floppy", &u8) == ESP_OK && u8 <= 1) {
+        settings.floppy = u8;
     }
     nvs_close(h);
 }
@@ -37,6 +41,7 @@ void settings_save(void)
     }
     nvs_set_u8(h, "rom", settings.rom);
     nvs_set_u8(h, "memory", settings.memory);
+    nvs_set_u8(h, "floppy", settings.floppy);
     nvs_commit(h);
     nvs_close(h);
 }

@@ -22,10 +22,11 @@ endif()
 project(esp32ql)
 
 # QL ROM images (not in git) go into 64 KB slots of the ql_roms partition on
-# "idf.py flash" (main/rom_store.c): js.rom in slot 0, minerva.rom in slot 1
+# "idf.py flash" (main/rom_store.c): js.rom in slot 0, minerva.rom in slot 1,
+# trumpcard.rom (the Trump Card's disk interface) in slot 2
 partition_table_get_partition_info(rom_partition "--partition-name ql_roms" "offset")
 if(rom_partition)
-    foreach(entry "js:0" "minerva:1")
+    foreach(entry "js:0" "minerva:1" "trumpcard:2")
         string(REPLACE ":" ";" parts "${entry}")
         list(GET parts 0 rom)
         list(GET parts 1 slot)

@@ -4,7 +4,8 @@
  *
  * The board side (tasks, LCD, touch, WiFi, Bluetooth, setup screen, web
  * page, console) is the shared runtime in ../esp32emu; this file plugs the
- * QL into it: memory, ROMs, settings, keyboard map, Microdrives, status.
+ * QL into it: memory, ROMs, settings, keyboard map, Microdrives and the
+ * Trump Card's floppy drives, status.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -25,9 +26,10 @@ static const char *TAG = "main";
 static const char *const rom_names[] = { "JS", "Minerva", "" };
 static const char *const rom_full[] = { "Sinclair JS (QDOS 1.10)", "Minerva 1.98" };
 static const char *const memory_names[] = { "128 KB", "640 KB", "" };
+static const char *const floppy_names[] = { "None", "Trump Card", "" };
 
 static ql_config_t s_cfg;
-static uint8_t *s_rom;
+static uint8_t *s_rom, *s_trump;
 static bool s_started;
 
 /* ---- Memory ----
@@ -39,20 +41,22 @@ static void reserve_memory(void)
 {
     settings_load();
     s_rom = heap_caps_malloc(QL_ROM_SIZE, MALLOC_CAP_SPIRAM);
+    s_trump = heap_caps_malloc(QL_TRUMP_ROM_SIZE, MALLOC_CAP_SPIRAM);
     s_cfg.ram = heap_caps_malloc(QL_RAM_640K, MALLOC_CAP_SPIRAM);
     s_cfg.opcode_tables = heap_caps_malloc(QL_OPCODE_TABLES_SIZE, MALLOC_CAP_SPIRAM);
 }
 
 static void storage(bool sd_card)
 {
-    emu_set_drive_info(sd_card ? "Microdrive cartridges on the SD card" : "No SD card: no Microdrives");
+    emu_set_drive_info(sd_card ? "Microdrive cartridges and floppy disks on the SD card" :
+                       "No SD card: no Microdrives or floppy disks");
 }
 
 /* ---- Starting ---- */
 
 static bool start(void)
 {
-    if (s_rom == NULL || s_cfg.ram == NULL) {
+    if (s_rom == NULL || s_trump == NULL || s_cfg.ram == NULL) {
         emu_set_message("Not enough memory: see the log.");
         return false;
     }
@@ -65,12 +69,24 @@ static bool start(void)
     }
     s_cfg.rom = s_rom;
     s_cfg.ram_size = settings.memory ? QL_RAM_640K : QL_RAM_128K;
+    s_cfg.trump_rom = NULL;
+    if (settings.floppy) {
+        if (!rom_store_load(ROM_TRUMP, s_trump)) {
+            static char message[160];
+            snprintf(message, sizeof(message), "No Trump Card ROM: put %s into roms/ and flash with idf.py flash, "
+                     "or set Floppy to None.", rom_store_name(ROM_TRUMP));
+            emu_set_message(message);
+            return false;
+        }
+        s_cfg.trump_rom = s_trump;
+    }
     if (!ql_init(&s_cfg)) {
         emu_set_message("The QL could not be set up: see the log.");
         return false;
     }
     s_started = true;
-    ESP_LOGI(TAG, "%s, %s", rom_full[settings.rom], memory_names[settings.memory]);
+    ESP_LOGI(TAG, "%s, %s%s", rom_full[settings.rom], memory_names[settings.memory],
+             settings.floppy ? ", a Trump Card" : "");
     return true;
 }
 
@@ -90,7 +106,7 @@ static int rom_get(void)
 
 static void rom_set(int i)
 {
-    if (i >= 0 && i < ROM_COUNT) {
+    if (i >= 0 && i <= ROM_MINERVA) {
         settings.rom = i;
         settings_save();
     }
@@ -109,53 +125,98 @@ static void memory_set(int i)
     }
 }
 
+static int floppy_get(void)
+{
+    return settings.floppy;
+}
+
+static void floppy_set(int i)
+{
+    if (i >= 0 && i <= 1) {
+        settings.floppy = i;
+        settings_save();
+    }
+}
+
 static const emu_choice_t choices[] = {
     { "ROM", rom_names, rom_get, rom_set, false },
     { "Memory", memory_names, memory_get, memory_set, false },
+    { "Floppy", floppy_names, floppy_get, floppy_set, false },
 };
 
-/* ---- Microdrives ---- */
+/* ---- Microdrives and floppy drives ---- */
 
-enum { DRIVE_MDV1, DRIVE_MDV2, DRIVES };
+enum { DRIVE_MDV1, DRIVE_MDV2, DRIVE_FLP1, DRIVE_FLP2, DRIVES };
 
-static const char *const extensions[] = { ".mdv", NULL };
-static const char *const drive_names[] = { "MDV1_", "MDV2_" };
+static const char *const extensions[] = { ".mdv", ".img", NULL };
+static const char *const drive_names[] = { "MDV1_", "MDV2_", "FLP1_", "FLP2_" };
 #define MDV_BYTES       174930          /* a blank cartridge image */
 static const disks_size_t sizes[] = {
     { MDV_BYTES, "Microdrive cartridge (.MDV)" },
+    { QL_FLP_IMAGE_SIZE, "720 KB floppy disk (.IMG)" },
 };
+
+static bool is_floppy(int drive)
+{
+    return drive >= DRIVE_FLP1;
+}
 
 static bool insert(int drive, const char *path)
 {
-    return ql_mdv_insert(drive, path);
+    return is_floppy(drive) ? ql_flp_insert(drive - DRIVE_FLP1, path) : ql_mdv_insert(drive, path);
 }
 
 static void eject(int drive)
 {
-    ql_mdv_eject(drive);
+    if (is_floppy(drive)) {
+        ql_flp_eject(drive - DRIVE_FLP1);
+    } else {
+        ql_mdv_eject(drive);
+    }
 }
 
 static const char *path(int drive)
 {
-    return ql_mdv_path(drive);
+    return is_floppy(drive) ? ql_flp_path(drive - DRIVE_FLP1) : ql_mdv_path(drive);
 }
 
 static bool write_protected(int drive)
 {
-    return ql_mdv_write_protected(drive);
+    return is_floppy(drive) ? ql_flp_write_protected(drive - DRIVE_FLP1) : ql_mdv_write_protected(drive);
 }
 
 static bool create(const char *path, uint32_t bytes)
 {
-    (void)bytes;
-    return ql_mdv_create(path);
+    return bytes == MDV_BYTES ? ql_mdv_create(path) : ql_flp_create(path);
+}
+
+static bool ends_with(const char *name, const char *ext)
+{
+    size_t n = strlen(name), e = strlen(ext);
+    return n > e && strcasecmp(name + n - e, ext) == 0;
+}
+
+/* Cartridges in the Microdrives, disk images in the floppy drives */
+static bool accepts(int drive, const char *name)
+{
+    return ends_with(name, is_floppy(drive) ? ".img" : ".mdv");
+}
+
+static uint32_t default_size(int drive)
+{
+    return drive >= 0 && is_floppy(drive) ? QL_FLP_IMAGE_SIZE : MDV_BYTES;
+}
+
+static const char *extension_for(uint32_t bytes)
+{
+    return bytes == MDV_BYTES ? ".mdv" : ".img";
 }
 
 static const disks_config_t disks = {
     .folder = "ql",
     .extensions = extensions,
-    .description = "Microdrive cartridges (.MDV)",
-    .title = "Microdrives",
+    .description = "Microdrive cartridges (.MDV), floppy disks (.IMG)",
+    .title = "Drives",
     .button = "Drives",
     .nvs_namespace = "qldisks",
     .drives = DRIVES,
@@ -170,20 +231,24 @@ static const disks_config_t disks = {
     .path = path,
     .write_protected = write_protected,
     .create = create,
+    .accepts = accepts,
+    .default_size = default_size,
+    .extension_for = extension_for,
 };
 
-/* Cartridge writes go to the SD card from here (core 0), between frames,
- * once nothing has been written for a second
+/* Cartridge and disk writes go to the SD card from here (core 0), between
+ * frames, once nothing has been written for a second
  */
 static void flush(void *arg)
 {
     ql_mdv_flush();
+    ql_flp_flush();
 }
 
 static void every_second(void)
 {
     static int dirty_for;
-    if (ql_mdv_dirty()) {
+    if (ql_mdv_dirty() || ql_flp_dirty()) {
         if (++dirty_for >= 2) {
             emu_paused(flush, NULL);
             dirty_for = 0;
@@ -204,6 +269,8 @@ static void status(emu_json_t *j, int section)
         snprintf(text, sizeof(text), "Sinclair QL, %s", memory_names[settings.memory]);
         emu_json_row(j, "System", text);
         emu_json_row(j, "ROM", rom_full[settings.rom]);
+        emu_json_row(j, "Floppy", settings.floppy ? "Miracle Trump Card (FLP1_, FLP2_; Toolkit 2: TK2_EXT)" :
+                     "None");
         snprintf(text, sizeof(text), "%s, screen at $%05X%s", (s.mode & 0x08) ? "256 × 256, 8 colours" :
                  "512 × 256, 4 colours", (s.mode & 0x80) ? 0x28000 : 0x20000, (s.mode & 0x02) ? ", blanked" : "");
         emu_json_row(j, "Screen", text);
@@ -211,8 +278,16 @@ static void status(emu_json_t *j, int section)
     }
     for (int d = 0; d < DRIVES; d++) {
         const char *name = disks_name(d);
-        emu_json_drive(j, drive_names[d], name, ql_mdv_write_protected(d), s.mdv_motor == d + 1,
-                       s.mdv_reads[d], s.mdv_writes[d], NULL);
+        if (is_floppy(d)) {
+            int f = d - DRIVE_FLP1;
+            char detail[32];
+            snprintf(detail, sizeof(detail), "track %u", s.flp_track[f]);
+            emu_json_drive(j, drive_names[d], name, ql_flp_write_protected(f), s.flp_light == f + 1,
+                           s.flp_reads[f], s.flp_writes[f], name ? detail : NULL);
+        } else {
+            emu_json_drive(j, drive_names[d], name, ql_mdv_write_protected(d), s.mdv_motor == d + 1,
+                           s.mdv_reads[d], s.mdv_writes[d], NULL);
+        }
     }
 }
 
@@ -229,7 +304,8 @@ static void console_info(char *buf, size_t len)
 /*   k <n>              tap matrix key n (row * 8 + column)
  *   K <n> <0|1>        key n down (1) or up (0)
  *   T <text>           type text (\n is ENTER)
- *   R <rom> [memory]   restart with ROM 0 JS, 1 Minerva; memory 0 128 KB, 1 640 KB
+ *   R <rom> [memory] [floppy]   restart with ROM 0 JS, 1 Minerva; memory 0
+ *                      128 KB, 1 640 KB; floppy 0 none, 1 the Trump Card
  */
 static bool console_command(const char *line)
 {
@@ -268,11 +344,12 @@ static bool console_command(const char *line)
         return true;
     }
     case 'R': {
-        int rom = 0, memory = settings.memory;
-        if (sscanf(line + 1, "%d %d", &rom, &memory) >= 1 && rom >= 0 && rom < ROM_COUNT && memory >= 0 &&
-            memory <= 1) {
+        int rom = 0, memory = settings.memory, floppy = settings.floppy;
+        if (sscanf(line + 1, "%d %d %d", &rom, &memory, &floppy) >= 1 && rom >= 0 && rom <= ROM_MINERVA &&
+            memory >= 0 && memory <= 1 && floppy >= 0 && floppy <= 1) {
             settings.rom = rom;
             settings.memory = memory;
+            settings.floppy = floppy;
             settings_save();
             emu_restart();
         }

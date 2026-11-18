@@ -2,7 +2,8 @@
 
 <p align="center">
   <b>A Sinclair QL on a 7-inch ESP32-S3 touch-screen board or an M5Stack Tab5.</b><br>
-  A 68008 with the QL's 8-bit bus timing, the ZX8301's two display modes, the JS or Minerva ROM, 128 or 640 KB.
+  A 68008 with the QL's 8-bit bus timing, the ZX8301's two display modes, the JS or Minerva ROM, 128 or 640 KB,<br>
+  Microdrives, and floppy disks on a Miracle Trump Card.
 </p>
 
 <p align="center">
@@ -15,26 +16,30 @@
 </p>
 
 <p align="center">
-  <b>Early development:</b> QDOS, SuperBASIC, the keyboard and the Microdrives work on both
-  boards; sound and floppy disks are next.
+  <b>Early development:</b> QDOS, SuperBASIC, the keyboard, the Microdrives and floppy disks
+  work on both boards; sound is still to come.
 </p>
 
 <p align="center">
-  <img alt="Psion Quill 2.35 on the Tab5, loaded from a Microdrive cartridge image: a document typed and saved, Quill asking Same document?" src="docs/images/tab5-quill-saved.png" width="49%">
+  <img alt="Psion Quill 2.35 on the Tab5, booted from a 720 KB floppy disk image through the Trump Card, a sentence typed" src="docs/images/tab5-quill-floppy.png" width="49%">
+  <img alt="The MaTouch starting with a Trump Card: Miracle Systems V1.31, Trump Card 640K RAM, CARE/QJUMP TK2.23, above the F1/F2 prompt" src="docs/images/matouch-trumpcard.png" width="49%">
+  <br>
   <img alt="SuperBASIC in mode 8 on the Tab5: a FOR loop drawing 70 circles in the seven inks" src="docs/images/tab5-basic-circles.png" width="49%">
+  <img alt="The setup screen on the Tab5: ROM JS or Minerva, Memory 128 KB or 640 KB, Floppy None or Trump Card, Sound" src="docs/images/tab5-setup.png" width="49%">
   <br>
+  <img alt="Psion Quill 2.35 on the Tab5, loaded from a Microdrive cartridge image: a document typed and saved, Quill asking Same document?" src="docs/images/tab5-quill-saved.png" width="49%">
   <img alt="SuperBASIC on the MaTouch: PRINT 2+2 typed in the command window, 4 in the output window" src="docs/images/matouch-basic-print.png" width="49%">
-  <img alt="The setup screen on the Tab5: ROM JS or Minerva, Memory 128 KB or 640 KB, Sound" src="docs/images/tab5-setup.png" width="49%">
   <br>
-  <sub>Psion Quill 2.35 from a Microdrive cartridge on the Tab5, a document just saved back to it;
-  SuperBASIC drawing circles in mode 8 (256 × 256, eight colours); PRINT 2+2 on the MaTouch; the
-  setup screen. Screenshots from the boards.</sub>
+  <sub>Psion Quill 2.35 booted from a floppy disk on the Tab5; the MaTouch starting with a Trump
+  Card; SuperBASIC drawing circles in mode 8 (256 × 256, eight colours); the setup screen; Quill
+  from a Microdrive cartridge, a document just saved back to it; PRINT 2+2 on the MaTouch.
+  Screenshots from the boards.</sub>
 </p>
 
 esp32ql turns the Makerfabs MaTouch ESP32-S3 Parallel TFT with Touch 7", or an
 M5Stack Tab5, into a Sinclair QL. A setup screen on the touch panel, and a web
 page on your network, handle the machine's settings and its Microdrive
-cartridges on the microSD card.
+cartridges and floppy disks on the microSD card.
 
 It's the sibling of [esp32ste](https://github.com/rlucencic/esp32ste) (Atari
 STE), [esp32mac](https://github.com/rlucencic/esp32mac) (Macintosh Plus, SE,
@@ -79,10 +84,18 @@ core (Musashi) this one shares with the ST, the Macs and the Amiga.
   their `BOOT` program. Psion Quill 2.35 loads from its cartridge, and a
   document saved in it comes back. Written cartridges go back to the card
   two seconds after the last write.
+- **Floppy disks**: a Miracle Trump Card (setup screen: Floppy) with its
+  own ROM (V1.31: the FLP_ driver, RAM disks, Toolkit 2) and its WD1772
+  disk controller; FLP1_ and FLP2_ take 720 KB disk images (`.img`, raw
+  sectors). FORMAT gives 1440 sectors, SAVE, LOAD, DIR, WCOPY work, and the
+  card boots `flp1_boot`: Quill copied from its cartridge boots from a disk
+  in a few seconds. Written disks go back to the card two seconds after
+  the last write.
 - `tools/mdvtool.py` puts QL software from a zip (with the QDOS headers QL
-  zips keep) onto a cartridge image; `tools/mdvcheck.py` checks one.
+  zips keep) onto a cartridge image, its blocks spaced along the tape as
+  QDOS spaces them; `tools/mdvcheck.py` checks one.
 
-**Next**, in order: floppy disks, QL zips turned into cartridges on the web
+**Next**, in order: QL zips turned into cartridges and disks on the web
 page, sound.
 
 ## Hardware
@@ -90,7 +103,7 @@ page, sound.
 - **Makerfabs MaTouch ESP32-S3 Parallel TFT with Touch 7"** (ESP32-S3,
   16 MB flash, 8 MB PSRAM, 1024 × 600), or
 - **M5Stack Tab5** (ESP32-P4, 1280 × 720).
-- A microSD card (FAT32 or exFAT) for the Microdrive cartridges, a Bluetooth
+- A microSD card (FAT32 or exFAT) for the cartridges and disks, a Bluetooth
   keyboard (the Tab5: USB too).
 
 ## Getting started
@@ -98,8 +111,8 @@ page, sound.
 You need ESP-IDF 5.5 and [esp32emu](https://github.com/rlucencic/esp32emu)
 cloned next to this repository.
 
-1. Put the ROM images into `roms/` (`js.rom`, `minerva.rom`: see
-   [roms/README.md](roms/README.md)).
+1. Put the ROM images into `roms/` (`js.rom`, `minerva.rom`, and
+   `trumpcard.rom` for floppy disks: see [roms/README.md](roms/README.md)).
 2. Build and flash (`flash` also writes the ROMs into their partition):
    ```sh
    # MaTouch
@@ -108,8 +121,8 @@ cloned next to this repository.
    idf.py -B build-tab5 -DIDF_TARGET=esp32p4 -DSDKCONFIG=$PWD/build-tab5/sdkconfig build
    idf.py -B build-tab5 -DIDF_TARGET=esp32p4 -DSDKCONFIG=$PWD/build-tab5/sdkconfig -p PORT flash
    ```
-3. On the setup screen choose the ROM and memory and tap Start. The web page
-   is at `http://sinclair-ql.local`.
+3. On the setup screen choose the ROM, memory and floppy interface, and tap
+   Start. The web page is at `http://sinclair-ql.local`.
 4. Answer the QL's question with F1 (monitor) or F2 (TV) on a Bluetooth or
    USB keyboard; SuperBASIC follows (it first looks for `mdv1_boot`: a
    cartridge with one in MDV1_ starts its program).
@@ -120,6 +133,10 @@ cloned next to this repository.
    ```sh
    tools/mdvtool.py add formatted.mdv software.zip
    ```
+6. Floppy disks (Floppy: Trump Card): `.img` images in the same folder, in
+   FLP1_ or FLP2_; a blank one needs `FORMAT flp1_name`. The card boots
+   `flp1_boot` when a disk is in FLP1_. Toolkit 2's commands come after
+   `TK2_EXT`; to copy a cartridge to a disk, `WCOPY mdv1_ TO flp1_`.
 
 ## Development
 
@@ -141,6 +158,9 @@ text, keys, memory dumps, disassembly of the ROM).
 - The QL's ROMs: Sinclair Research's QDOS and SuperBASIC (Tony Tebby, Jan
   Jones and others); Minerva by Laurence Reeves. Not part of this
   repository: see roms/README.md.
+- The Trump Card's ROM: Miracle Systems, with Tony Tebby's Toolkit 2 (QJump).
+  Not part of this repository either. Its memory map as MAME's
+  `trumpcard.cpp` (BSD-3-Clause) describes it.
 - The QL's hardware as described in Sinclair's QL Technical Guide and the
   QL community's documentation (Dilwyn Jones's site, sinclairql.net).
 

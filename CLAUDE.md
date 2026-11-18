@@ -4,7 +4,8 @@ A Sinclair QL (1984): a 68008 at 7.5 MHz, 128 KB RAM (640 KB with an
 expansion), 48 KB ROM (Sinclair's JS, QDOS 1.10, or Minerva 1.98), the
 ZX8301 (display, DRAM), the ZX8302 (clock, interrupts, Microdrives, serial
 out, the link to the IPC), the IPC (an 8049: keyboard, sound, serial in) and
-two Microdrives. Both boards (the user's call, 2026-11-18). The plan:
+two Microdrives; floppy disks through a Miracle Trump Card (its ROM's
+driver, a WD1772). Both boards (the user's call, 2026-11-18). The plan:
 esp32emu's CLAUDE.md, "To do" (the QL's entry). **What's next: `TODO.md`**.
 
 The board side (tasks, LCD, touch, SD, WiFi, BLE, setup screen, web page,
@@ -14,9 +15,9 @@ Changes there need all its projects built. A Raspberry Pi 5 sibling
 (`rpi5ql`) is planned: keep `components/ql` platform independent.
 
 The machine is our own (MIT), written from Sinclair's documentation (the QL
-Technical Guide) and the QL community's; emulators (MAME's ql.cpp is
-BSD-3-Clause; sQLux, uQLx, QLay are GPL) only to compare behaviour against,
-never copied. The research notes: `docs/ql-hardware.md`.
+Technical Guide) and the QL community's; emulators (MAME's ql.cpp and
+trumpcard.cpp are BSD-3-Clause; sQLux, uQLx, QLay are GPL) only to compare
+behaviour against, never copied. The research notes: `docs/ql-hardware.md`.
 
 ## Build, flash, debug (the Linux PC)
 
@@ -24,7 +25,7 @@ never copied. The research notes: `docs/ql-hardware.md`.
 # Tab5 (/dev/serial/by-id/usb-Espressif_USB_JTAG_serial_debug_unit_60:55:F9:FB:03:03-if00)
 bash -c '. ~/.espressif/tools/activate_idf_v5.5.6.sh >/dev/null 2>&1; \
   idf.py -B build-tab5 -DIDF_TARGET=esp32p4 -DSDKCONFIG=$PWD/build-tab5/sdkconfig build'
-# ... -p PORT flash (writes roms/js.rom and minerva.rom too), app-flash for the app only
+# ... -p PORT flash (writes the roms/ too), app-flash for the app only
 # MaTouch (its UART port: /dev/serial/by-id/usb-1a86_USB_Serial-*, 921600)
 bash -c '. ~/.espressif/tools/activate_idf_v5.5.6.sh >/dev/null 2>&1; idf.py build && idf.py -p PORT flash'
 ```
@@ -32,11 +33,15 @@ bash -c '. ~/.espressif/tools/activate_idf_v5.5.6.sh >/dev/null 2>&1; idf.py bui
 - The two builds share `managed_components/`: build one after the other,
   never both at once.
 - `flash` writes the ROMs into 64 KB slots of `ql_roms` (0x810000): js.rom
-  slot 0, minerva.rom slot 1 (48822 bytes: the rest reads $FF). A file of
-  the same name in the SD card's `ql/roms` overrides one; cartridges are in
-  `ql/` (`.mdv`).
-- NVS: namespace `ql` (`rom`, `memory`), drives `qldisks`. mDNS
-  `sinclair-ql.local` (the second board running it: `sinclair-ql-2.local`).
+  slot 0, minerva.rom slot 1 (48822 bytes: the rest reads $FF),
+  trumpcard.rom slot 2 (32 KB). A file of the same name in the SD card's
+  `ql/roms` overrides one; cartridges (`.mdv`) and floppy disks (`.img`)
+  are in `ql/`.
+- NVS: namespace `ql` (`rom`, `memory`, `floppy`), drives `qldisks`. mDNS
+  `sinclair-ql.local` (the second board running it: `sinclair-ql-2.local`;
+  `/api/info`'s `board` says which). Drives in the web API: 1 MDV1_, 2
+  MDV2_, 3 FLP1_, 4 FLP2_; a blank floppy: `curl -X POST
+  ".../api/new?size=737280"`.
 - The MaTouch: use its UART port, not native USB (native USB's lines are
   the speaker amplifier's: any traffic screeches through it). The S3 build
   has the speaker on, so its console is on the UART at 921600 once the
@@ -48,16 +53,19 @@ bash -c '. ~/.espressif/tools/activate_idf_v5.5.6.sh >/dev/null 2>&1; idf.py bui
 
 Console commands (`main/main.c`): `k <n>` tap key n (`ql.h`'s `QL_KEY_*`:
 57 F1, 59 F2, 48 ENTER, 54 SPACE), `K <n> 0|1`, `T <text>` (`\n` ENTER; a
-key every 3 frames), `R <rom> [memory]` restart with ROM 0 JS / 1
-Minerva, memory 0 128 KB / 1 640 KB. From the setup screen to SuperBASIC:
-Start, `k 57` (F1), wait ~10 s (the empty `mdv1_boot` attempt), `T PRINT
-2+2\n`.
+key every 3 frames), `R <rom> [memory] [floppy]` restart with ROM 0 JS /
+1 Minerva, memory 0 128 KB / 1 640 KB, floppy 0 none / 1 the Trump Card
+(only once the machine runs: on the setup screen tap the rows). From the
+setup screen to SuperBASIC: Start, `k 57` (F1), wait ~10 s (the empty
+`mdv1_boot` attempt), `T PRINT 2+2\n`. The setup rows (Tab5): ROM y 227,
+Memory 298, Floppy 369 (two buttons at x 426, 781); MaTouch: ROM 193,
+Memory 253, Floppy 313 (x 341, 626).
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `main/main.c` | The QL as an `emu_machine_t`: memory, start, setup rows (ROM, Memory), Microdrives, status, console |
+| `main/main.c` | The QL as an `emu_machine_t`: memory, start, setup rows (ROM, Memory, Floppy), the drives (MDV1_, MDV2_, FLP1_, FLP2_), status, console |
 | `main/keymap.c` | The board's keyboards (HID usages) to the QL's keys, by position |
 | `main/rom_store.c` | The ROMs from their partition slots, or the SD card's `ql/roms` |
 | `main/settings.c` | NVS `ql` |
@@ -69,9 +77,10 @@ Start, `k 57` (F1), wait ~10 s (the empty `mdv1_boot` attempt), `T PRINT
 | `components/ql/ipc.c` | The IPC (8049) at the protocol level: the link, the commands, the keyboard matrix and queue, typed text |
 | `components/ql/sound.c` | The sound ring (two samples a line, 31250 Hz; it paces the emulation) |
 | `components/ql/mdv.c` | The Microdrives: QLay images on a tape loop of gaps and records, the receiver and transmitter, writes back into the image |
+| `components/ql/flp.c` | The Trump Card's WD1772 and drive latch; 720 KB sector images (`.img`) |
 | `components/ql/host/` | Host build: `make -C components/ql/host run`, switches in host_main.c (`QL_IO=1` logs every I/O access) |
 | `tools/mdvcheck.py` | A QLay image's slots, syncs and checksums, sector numbers, the map, the directory |
-| `tools/mdvtool.py` | `ls`, `add`: files onto a QDOS-formatted cartridge image (from zips with their QDOS headers: executables keep their type and data space) |
+| `tools/mdvtool.py` | `ls`, `add`: files onto a QDOS-formatted cartridge image (from zips with their QDOS headers: executables keep their type and data space; blocks spaced along the tape as QDOS spaces them) |
 | `docs/ql-hardware.md` | The hardware research (2026-11-18): every register, the IPC, the Microdrive, the boot, with sources |
 | `roms/` | The ROMs (not in git; README.md says where they come from) |
 
@@ -82,7 +91,8 @@ Start, `k 57` (F1), wait ~10 s (the empty `mdv1_boot` attempt), `T PRINT
   (the overshoot carried into the next), then `ql_io_line()`.
 - **Memory** (`mem.c`): 20 address lines (1 MB, wrapping); 64 pages of
   16 KB to host pointers (ROM, RAM), NULL to the slow path (I/O at
-  $18000-$1BFFF; everything else reads 0, ignores writes). Bytes in the
+  $18000-$1BFFF, the Trump Card's below; everything else reads 0, ignores
+  writes). Bytes in the
   68008's order. A word access costs 4 clocks more than Musashi counts, a
   long 8 (the 68008's second byte cycle), taken from Musashi's remaining
   cycles. No ZX8301 contention yet.
@@ -145,6 +155,42 @@ Start, `k 57` (F1), wait ~10 s (the empty `mdv1_boot` attempt), `T PRINT
   Quill 2.35 boots from its cartridge, a document saved and loaded again
   in a fresh Quill; on the Tab5 Quill from the SD card and a document saved
   (read back from the downloaded image); the MaTouch boots Quill.
+- **The Trump Card** (setup row Floppy, on by default; `ql_config_t`'s
+  `trump_rom`; MAME's trumpcard.cpp for the map): its 32 KB ROM (V1.31:
+  the FLP_ driver, RAM disks, Toolkit 2.23) at $10000-$17FFF; a read of
+  $0C000-$0FFFF (QDOS's ROM probe) also shows it at $C0000-$C7FFF, a read
+  of $10000-$17FFF hides it again (`trump_map()`: while shown, the $10000
+  pages take the slow path to see that read). A WD1772 at $1C000-$1C003
+  (status/command, track, sector, data), a write-only latch at $1E000
+  (bit 1 FLP1_, bit 0 FLP2_, bit 2 motor, bit 3 side); no interrupts, the
+  driver polls. The banner: "Miracle Systems V1.31 ... Trump Card 640K
+  RAM, CARE/QJUMP TK2.23". The card boots `flp1_boot` when a disk is in
+  FLP1_ (a disk without one: no `mdv1_boot` either), else `mdv1_boot`.
+  Toolkit 2's commands (WCOPY, WDIR, ...) come after `TK2_EXT` (before it
+  "bad name", as the card's manual has boot files start with it);
+  `FLP_USE mdv` makes MDV1_ mean FLP1_ (Quill's boot runs `EXEC_W
+  MDV1_quill`).
+- **The WD1772** (`flp.c`): runs on its own clock: a sector is found 1 ms
+  after the command, then a byte every 32 us (DRQ); a byte the CPU didn't
+  take (or give) by the next is lost data; Read Address puts the ID's track
+  in the sector register at its end; steps 3 ms; Write Track takes 6250
+  bytes ($F5 a sync, $F6 an index mark, $F7 the CRC; $FE an ID mark, $FB a
+  data mark) and stores the sectors it finds. Type I status: track 0 from
+  the head with or without a disk, index pulses (4 ms a turn of 200 ms)
+  and write-protect (no disk: protected). The motor bit for ten turns after
+  a command. Images: raw sectors, track by track, side 0 then 1, 512
+  bytes (720 KB: 80 x 2 x 9; 360 KB and 800 KB by size), in memory (800 KB
+  each, PSRAM), written back 2 s after the last write. Each track keeps
+  the track number its IDs were formatted with (`id_track`). Checked on
+  the host (JS and Minerva, 128 and 640 KB): FORMAT of a blank image
+  ("1440/1440 sectors"), SAVE, DIR, LOAD and RUN in a fresh run, WCOPY of
+  Quill's cartridge to a disk, Quill booting from it (its editor 8 s after
+  F1, from the cartridge ~37 s), a document saved and loaded in a fresh
+  Quill.
+  On the Tab5 (2026-11-18): the banner, FORMAT of a blank made through the
+  web API, a program saved (the downloaded image LRUNs on the host), Quill
+  from its disk (4 s after F1), a document saved into the image; on the
+  MaTouch the same Quill disk, a document saved (core 1 59%).
 
 ## Lessons
 
@@ -166,6 +212,21 @@ Start, `k 57` (F1), wait ~10 s (the empty `mdv1_boot` attempt), `T PRINT
 - **Danish Quill (2.24 DK) won't save on a JS ROM** ("Dette program kan
   kun køre på en dansk QL"): use the English 2.35 (`qui235m.zip`; the
   djw site's ready `quill.mdv` answered HTTP 500 on 2026-11-18).
+- **The WD1772 doesn't wait for the CPU**: the Trump Card's FORMAT tells
+  one side from two by writing side 1 of track 0 with IDs saying track 1,
+  then side 0, then a Read Address on side 1 whose bytes it never reads:
+  it waits for busy to drop and takes the sector register (the ID's track).
+  A controller that held each byte until the CPU took it never finished
+  that command (forced off after 4 s) and the disk came out single-sided
+  ("720/720 sectors"); and IDs made up from the head's position said track
+  0 there. Hence its own byte clock with lost data, and `id_track`.
+- **mdvtool put a file's blocks one slot behind each other**: sector
+  numbers count down along the tape, and it gave a file free sectors
+  upwards, so a channel reading the file in order (COPY, WCOPY) waited
+  nearly a turn (8 s) for each block (52 KB copied in over 13 minutes).
+  LOAD and EXEC read a whole file in any order, so Quill itself loaded
+  fine. QDOS puts each next block 13 slots further on (the collection's
+  cartridges): mdvtool does too now (the same COPY in ~70 s).
 - **Read the ROM before guessing**: the JS ROM's own routines answered
   the IPC protocol, the keyboard codes and the Microdrive registers exactly
   (`QL_IO=1` for who touches which register, `QL_DASM` to read the code,
@@ -189,6 +250,13 @@ Start, `k 57` (F1), wait ~10 s (the empty `mdv1_boot` attempt), `T PRINT
   a cartridge from `qui235m.zip` (`tools/mdvtool.py add <formatted>.mdv
   qui235m.zip`) in MDV1_, F1: Quill's editor by frame ~2000; F3 then S
   (`QL_KEYS` 60, 35) and a name to save, F3 then L (24) to load.
+- Floppies on the host: `head -c 737280 /dev/zero > blank.img`,
+  `QL_TRUMP=roms/trumpcard.rom QL_RAM_KB=640 QL_FLP1=blank.img
+  QL_KEYS="600:57:1;603:57:0" QL_TYPE='800:FORMAT flp1_test\n'` (4000
+  frames: "1440/1440 sectors"; F1 after the 640 KB RAM test, frame ~550).
+  `QL_FLP_LOG=1` prints each WD1772 command and the IDs a Write Track
+  writes. Quill on a disk: `TK2_EXT`, `WCOPY mdv1_ TO flp1_`, `A`; its boot
+  needs `FLP_USE mdv` first, or its line 8 as `EXEC_W flp1_quill`.
 - Microdrives on the boards: upload the image (`curl -T x.mdv
   http://sinclair-ql.local/disks/`), insert (`curl -X PUT --data "x.mdv"
   .../api/drive/1`), Start, `k 57`; the image back with `curl -o

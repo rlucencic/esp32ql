@@ -16,6 +16,8 @@
  *   QL_TYPE=<frame>:<text>[|...]  type text from that frame (\n is ENTER)
  *   QL_KEYS=<frame>:<key>:<0|1>[;...]  matrix keys down or up
  *   QL_MDV1, QL_MDV2       cartridge images (written: use copies)
+ *   QL_TRUMP=<rom>         a Trump Card with that ROM (floppy disks, Toolkit 2)
+ *   QL_FLP1, QL_FLP2       its disk images (written: use copies)
  *   QL_WAV=<file>          the sound
  *   QL_DUMP=<addr>:<len>[;...]  memory in hex at the end (QDOS's system
  *                          variables are at $28000; $28068 the job table)
@@ -172,10 +174,22 @@ int main(int argc, char **argv)
     printf("ROM %s: %zu bytes\n", argv[1], n);
     extern bool ql_debug_io;
     ql_debug_io = getenv("QL_IO") != NULL;
+    extern bool ql_debug_flp;
+    ql_debug_flp = getenv("QL_FLP_LOG") != NULL;
+    static uint8_t trump[QL_TRUMP_ROM_SIZE];
+    if (getenv("QL_TRUMP")) {
+        FILE *t = fopen(getenv("QL_TRUMP"), "rb");
+        if (t == NULL || fread(trump, 1, sizeof(trump), t) < 16384) {
+            fprintf(stderr, "can't read %s\n", getenv("QL_TRUMP"));
+            return 1;
+        }
+        fclose(t);
+    }
+    const uint8_t *trump_rom = getenv("QL_TRUMP") ? trump : NULL;
     /* QL_DASM=<address>:<count>: disassemble the ROM there and exit */
     if (getenv("QL_DASM")) {
         static uint8_t ram0[QL_RAM_128K];
-        ql_config_t c0 = { .rom = rom, .ram = ram0, .ram_size = QL_RAM_128K };
+        ql_config_t c0 = { .rom = rom, .ram = ram0, .ram_size = QL_RAM_128K, .trump_rom = trump_rom };
         ql_init(&c0);
         const char *e = getenv("QL_DASM");
         disassemble(strtoul(e, NULL, 16), strchr(e, ':') ? atoi(strchr(e, ':') + 1) : 40);
@@ -187,7 +201,7 @@ int main(int argc, char **argv)
     uint32_t ram_kb = getenv("QL_RAM_KB") ? strtoul(getenv("QL_RAM_KB"), NULL, 10) : 128;
 
     static uint8_t ram[QL_RAM_640K];
-    ql_config_t cfg = { .rom = rom, .ram = ram, .ram_size = ram_kb * 1024 };
+    ql_config_t cfg = { .rom = rom, .ram = ram, .ram_size = ram_kb * 1024, .trump_rom = trump_rom };
     if (!ql_init(&cfg)) {
         fprintf(stderr, "ql_init failed\n");
         return 1;
@@ -195,6 +209,12 @@ int main(int argc, char **argv)
     for (int d = 0; d < QL_MDV_DRIVES; d++) {
         const char *path = getenv(d == 0 ? "QL_MDV1" : "QL_MDV2");
         if (path && !ql_mdv_insert(d, path)) {
+            fprintf(stderr, "can't insert %s\n", path);
+        }
+    }
+    for (int d = 0; d < QL_FLP_DRIVES; d++) {
+        const char *path = getenv(d == 0 ? "QL_FLP1" : "QL_FLP2");
+        if (path && !ql_flp_insert(d, path)) {
             fprintf(stderr, "can't insert %s\n", path);
         }
     }
@@ -268,6 +288,7 @@ int main(int argc, char **argv)
         }
     }
     ql_mdv_flush();
+    ql_flp_flush();
     if (s_wav) {
         wav_header(s_wav, s_wav_frames);
         fclose(s_wav);
@@ -276,6 +297,10 @@ int main(int argc, char **argv)
     ql_status_t s;
     ql_get_status(&s);
     printf("after %u frames: PC $%05lx SR %04x mode %02x\n", s_frame, (unsigned long)s.pc, s.sr, s.mode);
+    if (cfg.trump_rom) {
+        printf("floppies: %u/%u sectors read, %u/%u written (tracks formatted count too)\n", s.flp_reads[0],
+               s.flp_reads[1], s.flp_writes[0], s.flp_writes[1]);
+    }
     /* QL_DUMP=<address>:<length>[;...]: memory at the end, in hex */
     for (const char *e = getenv("QL_DUMP"); e && *e;) {
         uint32_t a = strtoul(e, NULL, 16), len = strchr(e, ':') ? strtoul(strchr(e, ':') + 1, NULL, 0) : 64;

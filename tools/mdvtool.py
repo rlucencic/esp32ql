@@ -12,13 +12,17 @@ executable needs it, QDOS's own zip sets it); other files go on as data,
 their name with '.' as '_'. Each file is its 64-byte header and its bytes
 in 512-byte blocks, one a free sector; the map (sector 0: a file and block
 number a sector) and the directory (file 0: a copy of each file's header)
-are updated.
+are updated. A file's blocks are spaced as QDOS spaces them, each the
+first free slot at least 13 further along the tape than the last (sector
+numbers count down along it), so a channel reading the file in order
+(COPY) gets a block every few slots instead of one a turn.
 """
 import sys
 import zipfile
 
 SLOTS, SLOT = 255, 686
 FREE, MAP = 0xFD, 0xF8
+SPACING = 13                            # slots between a file's blocks, as QDOS has them
 
 
 def checksum(data):
@@ -72,6 +76,21 @@ class Cartridge:
     def free_sectors(self):
         return [s for s in range(1, 255) if self.map[2 * s] == FREE and s in self.slot_of]
 
+    def allocate(self, count, start=None):
+        """count free sectors along the tape, each SPACING slots or more
+        after the last (from the slot after `start`'s, or the first free one)"""
+        by_slot = {self.slot_of[s]: s for s in self.free_sectors()}
+        if count > len(by_slot):
+            return None
+        slot = (self.slot_of[start] + SPACING) % SLOTS if start is not None else min(by_slot)
+        out = []
+        for _ in range(count):
+            while slot not in by_slot:
+                slot = (slot + 1) % SLOTS
+            out.append(by_slot.pop(slot))
+            slot = (slot + SPACING) % SLOTS
+        return out
+
     def directory(self):
         d = bytearray(self.read_file(0)) if self.blocks_of(0) else bytearray(64)
         length = int.from_bytes(d[0:4], "big") or 64
@@ -102,21 +121,21 @@ class Cartridge:
         h[14:16] = len(raw).to_bytes(2, "big")
         h[16:52] = raw.ljust(36, b"\0")
         content = bytes(h) + data
-        free = self.free_sectors()
         blocks = (len(content) + 511) // 512
-        if blocks > len(free):
-            sys.exit(f"{name}: {blocks} blocks, {len(free)} free sectors: the cartridge is full")
+        sectors = self.allocate(blocks)
+        if sectors is None:
+            sys.exit(f"{name}: {blocks} blocks, {len(self.free_sectors())} free sectors: the cartridge is full")
         for b in range(blocks):
-            self.write_block(free[b], number, b, content[b * 512:(b + 1) * 512])
+            self.write_block(sectors[b], number, b, content[b * 512:(b + 1) * 512])
         # the directory: entry n is file n's header
         if len(d) < (number + 1) * 64:
             d += bytes((number + 1) * 64 - len(d))
         d[number * 64:(number + 1) * 64] = h
         d[0:4] = len(d).to_bytes(4, "big")
         old = self.blocks_of(0)
-        free = [s for s in self.free_sectors()]
         for b in range((len(d) + 511) // 512):
-            sector = old.get(b) or free.pop(0)
+            sector = old.get(b) or self.allocate(1, old.get(b - 1))[0]
+            old[b] = sector
             self.write_block(sector, 0, b, d[b * 512:(b + 1) * 512])
         print(f"  {name:36} {len(data):7} bytes  type {h[5]}" +
               (f"  dataspace {int.from_bytes(h[6:10], 'big')}" if h[5] == 1 else "") +

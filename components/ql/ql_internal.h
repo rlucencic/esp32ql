@@ -30,6 +30,8 @@
 
 typedef struct {
     const uint8_t *rom;
+    const uint8_t *trump_rom;       /* the Trump Card's, NULL without one */
+    bool trump_rom_en;              /* its ROM showing at $C0000 too */
     uint8_t *ram;
     uint32_t ram_size, ram_end;     /* RAM is $20000 to ram_end */
 
@@ -66,6 +68,7 @@ void ql_update_irq(void);
 
 /* Memory (mem.c) */
 void ql_mem_init(void);
+void ql_mem_reset(void);
 uint8_t ql_peek8(uint32_t a);
 void ql_poke8(uint32_t a, uint8_t v);
 
@@ -93,6 +96,12 @@ void ql_mdv_write(uint8_t v, uint64_t clock);       /* $18022 written */
 bool ql_mdv_gap(uint64_t clock);                    /* a gap under the head (or none turning) */
 int ql_mdv_motor(void);                             /* the drive turning (1, 2), 0 none */
 void ql_mdv_counts(uint32_t *reads, uint32_t *writes);
+
+/* The Trump Card's floppy controller (flp.c) */
+void ql_flp_reset(void);
+uint8_t ql_flp_read8(uint32_t a);                   /* $1C000-$1C003 */
+void ql_flp_write8(uint32_t a, uint8_t v);          /* $1C000-$1C003, $1E000 */
+void ql_flp_status(uint8_t *light, uint8_t *track, uint32_t *reads, uint32_t *writes);
 
 /* Sound (sound.c) */
 void ql_sound_reset(void);

@@ -7,6 +7,7 @@
 typedef struct {
     uint8_t rom;            /* rom_id_t: 0 JS, 1 Minerva */
     uint8_t memory;         /* 0: 128 KB, 1: 640 KB (512 KB expansion) */
+    uint8_t floppy;         /* 0: none, 1: a Miracle Trump Card (floppy disks, Toolkit 2) */
 } settings_t;
 
 extern settings_t settings;
