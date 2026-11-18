@@ -29,6 +29,7 @@
 
 #define QL_MDV_DRIVES           2
 #define QL_FLP_DRIVES           2
+#define QL_SER_PORTS            2
 #define QL_FLP_IMAGE_SIZE       (80 * 2 * 9 * 512)  /* a 720 KB disk */
 #define QL_TRUMP_ROM_SIZE       (32 * 1024)
 
@@ -103,6 +104,20 @@ bool ql_flp_write_protected(int drive);
 bool ql_flp_create(const char *path);       /* a blank 720 KB disk, for FORMAT */
 bool ql_flp_dirty(void);
 void ql_flp_flush(void);
+
+/* ---- Serial ports: SER1 (0) and SER2 (1) ----
+ *
+ * What the QL sends (at its baud rate): ql_ser_take(); what it is to
+ * receive: ql_ser_give() takes as many as fit (give the rest later), the
+ * IPC passes them on as QDOS reads. Only while ql_ser_connect() says
+ * something listens on the port is what the QL sends kept (else it is lost,
+ * as on a port with nothing plugged in); a full queue holds the QL back
+ * through the port's handshake line. Any task.
+ */
+int ql_ser_take(int port, uint8_t *buf, int max);
+int ql_ser_give(int port, const uint8_t *buf, int len);
+void ql_ser_connect(int port, bool connected);
+bool ql_ser_is_open(int port);              /* QDOS receives on it */
 
 /* ---- The clock: the host's time plus an offset (seconds) that setting
  * it on the QL (SDATE, ADATE) changes; the board keeps it across restarts

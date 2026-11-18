@@ -76,7 +76,7 @@ static bool s_multi;
 static uint64_t s_ready;                /* when the next byte (or the end) is due */
 static uint64_t s_motor_off;            /* when the motor stops */
 static int s_pos, s_len;
-static uint8_t s_buf[TRACK_BYTES];
+static uint8_t *s_buf;                  /* TRACK_BYTES (QL_SLOW_ALLOC) */
 static int s_step_dir = 1;
 static int s_next_id;                   /* read address: the next sector to pass */
 
@@ -476,6 +476,14 @@ void ql_flp_write8(uint32_t a, uint8_t v)
         }
         break;
     }
+}
+
+bool ql_flp_init(void)
+{
+    if (s_buf == NULL) {
+        s_buf = QL_SLOW_ALLOC(TRACK_BYTES);
+    }
+    return s_buf != NULL;
 }
 
 void ql_flp_reset(void)

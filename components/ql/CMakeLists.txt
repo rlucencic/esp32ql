@@ -8,6 +8,7 @@ idf_component_register(SRCS "ql.c"
                             "video.c"
                             "sound.c"
                             "beep.c"
+                            "ser.c"
                        INCLUDE_DIRS "include"
                        PRIV_INCLUDE_DIRS "."
                        REQUIRES musashi)

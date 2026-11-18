@@ -21,6 +21,8 @@
  *   QL_TRUMP=<rom>         a Trump Card with that ROM (floppy disks, Toolkit 2)
  *   QL_FLP1, QL_FLP2       its disk images (written: use copies)
  *   QL_WAV=<file>          the sound
+ *   QL_SER1_IN, QL_SER1_OUT, QL_SER2_IN, QL_SER2_OUT=<file>  what the serial
+ *                          ports receive (fed as the QL takes it) and send
  *   QL_BEEP_EDGES=<8 bytes>[,r4,seed]  the beeper's edges for those INSO
  *                          bytes (machine cycles from the first) and exit
  *   QL_DUMP=<addr>:<len>[;...]  memory in hex at the end (QDOS's system
@@ -286,7 +288,40 @@ int main(int argc, char **argv)
         e = *s == '|' ? s + 1 : NULL;
     }
 
+    /* the serial ports: files in and out */
+    static uint8_t *ser_in[QL_SER_PORTS];
+    static long ser_in_len[QL_SER_PORTS], ser_in_pos[QL_SER_PORTS];
+    FILE *ser_out[QL_SER_PORTS] = { NULL, NULL };
+    for (int p = 0; p < QL_SER_PORTS; p++) {
+        char name[16];
+        snprintf(name, sizeof(name), "QL_SER%d_IN", p + 1);
+        FILE *in = getenv(name) ? fopen(getenv(name), "rb") : NULL;
+        if (in) {
+            fseek(in, 0, SEEK_END);
+            ser_in_len[p] = ftell(in);
+            fseek(in, 0, SEEK_SET);
+            ser_in[p] = malloc(ser_in_len[p] + 1);
+            ser_in_len[p] = fread(ser_in[p], 1, ser_in_len[p], in);
+            fclose(in);
+        }
+        snprintf(name, sizeof(name), "QL_SER%d_OUT", p + 1);
+        ser_out[p] = getenv(name) ? fopen(getenv(name), "wb") : NULL;
+        ql_ser_connect(p, ser_out[p] != NULL || ser_in[p] != NULL);
+    }
+
     for (s_frame = 0; s_frame < frames; s_frame++) {
+        for (int p = 0; p < QL_SER_PORTS; p++) {
+            if (ser_in[p] && ser_in_pos[p] < ser_in_len[p]) {
+                ser_in_pos[p] += ql_ser_give(p, ser_in[p] + ser_in_pos[p], ser_in_len[p] - ser_in_pos[p]);
+            }
+            uint8_t buf[512];
+            int n;
+            while ((n = ql_ser_take(p, buf, sizeof(buf))) > 0) {
+                if (ser_out[p]) {
+                    fwrite(buf, 1, n, ser_out[p]);
+                }
+            }
+        }
         keys_for_frame(s_frame);
         if (typed < types && s_frame >= type_frames[typed] && ql_type(texts[typed])) {
             typed++;
@@ -318,6 +353,14 @@ int main(int argc, char **argv)
     }
     ql_mdv_flush();
     ql_flp_flush();
+    for (int p = 0; p < QL_SER_PORTS; p++) {
+        if (ser_out[p]) {
+            fclose(ser_out[p]);
+        }
+        if (ser_in[p]) {
+            printf("SER%d: %ld of %ld bytes received\n", p + 1, ser_in_pos[p], ser_in_len[p]);
+        }
+    }
     if (s_wav) {
         wav_header(s_wav, s_wav_frames);
         fclose(s_wav);

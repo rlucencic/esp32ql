@@ -28,6 +28,7 @@
 bool ql_debug_io;
 
 #define INT_GAP         0x01
+#define INT_TRANSMIT    0x04
 #define INT_FRAME       0x08
 #define MASK_GAP        0x20
 #define RTC_1961        283996800u      /* seconds from 1961 to 1970 */
@@ -45,6 +46,7 @@ void ql_io_reset(void)
     s_gap = true;
     ql_ipc_reset();
     ql_mdv_reset();
+    ql_ser_reset();
 }
 
 #ifndef ESP_PLATFORM
@@ -124,9 +126,14 @@ uint8_t ql_io_read8(uint32_t a)
     case 0x18000: case 0x18001: case 0x18002: case 0x18003:
         v = rtc() >> (8 * (3 - (a & 3)));
         break;
-    case 0x18020:
-        v = (ql_ipc_bit() << 7) | ql_mdv_status(ql_clock());
+    case 0x18020: {
+        uint64_t clock = ql_clock();
+        v = (ql_ipc_bit() << 7) | ql_mdv_status(clock) | ql_ser_handshake();
+        if ((s_tmode & 0x10) == 0 && ql_ser_busy(clock)) {
+            v |= 0x02;                          /* TXFL: a serial byte going out */
+        }
         break;
+    }
     case 0x18021:
         v = s_int_status | status_top(ql_clock());
         break;
@@ -176,7 +183,11 @@ void ql_io_write8(uint32_t a, uint8_t v)
         ql_update_irq();
         break;
     case 0x18022:
-        ql_mdv_write(v, ql_clock());
+        if ((s_tmode & 0x18) == 0x10) {
+            ql_mdv_write(v, ql_clock());        /* microdrive mode */
+        } else if ((s_tmode & 0x10) == 0) {
+            ql_ser_send(s_tmode, v, ql_clock());    /* SER1, SER2 */
+        }                                       /* (the network: not here) */
         break;
     case 0x18063:
         ql_video_write_mode(v);
@@ -196,7 +207,12 @@ void ql_io_frame(void)
 void ql_io_line(void)
 {
     ql_sound_line();
-    gap_check(ql_clock(), false);
+    uint64_t clock = ql_clock();
+    gap_check(clock, false);
+    if (ql_ser_line(clock)) {
+        s_int_status |= INT_TRANSMIT;           /* a serial byte is out: the next */
+        ql_update_irq();
+    }
 }
 
 int ql_io_irq_level(void)

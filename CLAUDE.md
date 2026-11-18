@@ -5,7 +5,7 @@ expansion), 48 KB ROM (Sinclair's JS, QDOS 1.10, or Minerva 1.98), the
 ZX8301 (display, DRAM), the ZX8302 (clock, interrupts, Microdrives, serial
 out, the link to the IPC), the IPC (an 8049: keyboard, sound, serial in) and
 two Microdrives; floppy disks through a Miracle Trump Card (its ROM's
-driver, a WD1772). Both boards (the user's call, 2026-11-18). The plan:
+driver, a WD1772); SER1 and SER2 as TCP ports. Both boards (the user's call, 2026-11-18). The plan:
 esp32emu's CLAUDE.md, "To do" (the QL's entry). **What's next: `TODO.md`**.
 
 The board side (tasks, LCD, touch, SD, WiFi, BLE, setup screen, web page,
@@ -68,6 +68,7 @@ Memory 253, Floppy 313 (x 341, 626).
 |---|---|
 | `main/main.c` | The QL as an `emu_machine_t`: memory, start, setup rows (ROM, Memory, Floppy), the drives (MDV1_, MDV2_, FLP1_, FLP2_), status, console |
 | `main/keymap.c` | The board's keyboards (HID usages) to the QL's keys, by position |
+| `main/serial.c` | SER1 and SER2 as TCP ports 2301 and 2302 (a task: one client a port) |
 | `main/rom_store.c` | The ROMs from their partition slots, or the SD card's `ql/roms` |
 | `main/settings.c` | NVS `ql` |
 | `main/web/qlfiles.js` | The web page's packer (served as /machine.js): dropped QL files and zips onto a new cartridge and floppy disk |
@@ -75,8 +76,9 @@ Memory 253, Floppy 313 (x 341, 626).
 | `components/ql/mem.c` | The 68008's memory map and bus timing (Musashi's callbacks) |
 | `components/ql/ql.c` | Set up, reset, the frame loop, interrupts, the debugger |
 | `components/ql/video.c` | The ZX8301's picture: modes 4 and 8, flashing, snapshots for the presenter |
-| `components/ql/io.c` | On-board I/O at $18000: the ZX8302 (interrupts, the clock, the Microdrives' select and gap: empty drives so far), MODE |
-| `components/ql/ipc.c` | The IPC (8049) at the protocol level: the link, the commands, the keyboard matrix and queue, typed text |
+| `components/ql/io.c` | On-board I/O at $18000: the ZX8302 (interrupts, the clock, the Microdrives' select and gap, the transmit register's modes), MODE |
+| `components/ql/ipc.c` | The IPC (8049) at the protocol level: the link, the commands, the keyboard matrix and queue, typed text, serial input |
+| `components/ql/ser.c` | The serial ports: the ZX8302's transmitter and handshake lines, the IPC's receive buffers, queues to and from the host |
 | `components/ql/sound.c` | The sound ring (two samples a line, 31250 Hz; it paces the emulation) |
 | `components/ql/beep.c` | The IPC's beeper: its timer interrupt's routine, with each path's machine cycles |
 | `components/ql/mdv.c` | The Microdrives: QLay images on a tape loop of gaps and records, the receiver and transmitter, writes back into the image |
@@ -232,6 +234,33 @@ Memory 253, Floppy 313 (x 341, 626).
   DC-blocking filter (a speaker's coupling) into the ring, two samples a
   line, each the pin's average over it. ~1% of the Tab5's core 1 while it
   plays (profile); the Tab5 and the MaTouch at 100% with a sweeping BEEP.
+- **Serial ports** (`ser.c`; docs/ql-hardware.md 3.7, 3.8, 4.10). Sending
+  is the ZX8302's: in serial mode ($18002 bits 4-3: 00 SER1, 01 SER2) a
+  byte written to $18022 goes out at $18002's baud rate as 11 bits (start,
+  8, two stops); $18020 bit 1 (TXFL) is set meanwhile, then the transmit
+  interrupt ($18021 bit 2) has QDOS send the next (JS $2DF6, a byte a
+  call): ~670 bytes a second at 9600 (the host; 873 at most). In
+  Microdrive mode $18022 goes to the tape, in network mode nowhere.
+  $18020 bits 4/5 (SER1's DTR, SER2's CTS) hold QDOS back while the
+  host's queue (4 KB a port) is nearly full (not tested: no client here
+  was slow enough). Receiving is the IPC's:
+  commands 2/3 open a port, 4/5 close it, 6/7 (RDS) hand over up to 23
+  bytes (a count byte, then them), status bits 4/5 say a port has some;
+  the bytes wait in a 4 KB queue a port and go as fast as QDOS asks,
+  whatever BAUD says (a 5 KB program LOADed over SER1 in ~6 s on the
+  host). Nothing listening on a port (`ql_ser_connect()`): what the QL
+  sends there is lost, as with nothing plugged in. QDOS's own ways: a `z`
+  channel (`ser1z`) ends a received file at CTRL-Z and sends one as it
+  closes (`LOAD ser1z` answers with $1A); the JS ROM sends a NUL through
+  SER1 as it starts. The boards (`main/serial.c`): SER1 on TCP port 2301,
+  SER2 on 2302 (`nc <board> 2301`), one client a port (the newest
+  replaces the one before), bytes as they are (no telnet negotiation);
+  the status row "Serial" says which have a client. The task starts once
+  the machine runs, its stack in PSRAM; lwIP's sockets raised to 16
+  (`sdkconfig.defaults`). Checked: the host (both ports both ways, the 5
+  KB program); the Tab5 on SER1 and the MaTouch on SER2 (2026-11-18): a
+  `PRINT #3` line reached a PC client, a program sent from the PC loaded
+  (`LOAD ser1z`, `ser2z`) and ran, both at 100%.
 - **The web page's packer** (`main/web/qlfiles.js`, esp32emu's
   `registerPacker`): files dropped on the page (loose, in folders, in zips)
   go onto a new cartridge (`<name>.mdv`, when they fit in its 254 sectors)
@@ -365,6 +394,15 @@ Memory 253, Floppy 313 (x 341, 626).
   logically: block 0's map is in physical sectors 1, 4 and 7, and files
   from cylinder 1 on are turned by the skew; reading the image in order
   gave garbage, locating each block by content found the rule.
+- **The MaTouch's internal RAM has no room for big static buffers**: the
+  serial queues (16 KB) as static arrays left the speaker's I2S no DMA
+  buffer ("i2s_alloc_dma_desc: allocate DMA buffer failed"), and the
+  machine, paced by its sound, ran at 0 frames a second (a black
+  screen). Moving the serial task's stack to PSRAM wasn't enough; the
+  queues and the floppy's track buffer now come from PSRAM
+  (`QL_SLOW_ALLOC` in ql_internal.h, `ql_ser_init()`, `ql_flp_init()`):
+  the lowest free internal RAM 14.9 KB, was 5-9 KB. Buffers the CPU
+  doesn't run in go there.
 - **Read the ROM before guessing**: the JS ROM's own routines answered
   the IPC protocol, the keyboard codes and the Microdrive registers exactly
   (`QL_IO=1` for who touches which register, `QL_DASM` to read the code,
@@ -440,6 +478,15 @@ Memory 253, Floppy 313 (x 341, 626).
   KISO, `QL_WAV=out.wav` records (BEEP 30000,50 at frame 600: 189.3 Hz);
   `QL_BEEP_EDGES=p1,p2,...` prints beep.c's edges alone; `tools/ipc_beep.py
   <ipc8049.txt>` compares them with the IPC's code.
+- Serial ports on the host: `QL_SER1_IN=prog.txt` (a program ending in
+  CTRL-Z, $1A) with `QL_TYPE='700:LOAD ser1z\n|1100:RUN\n'`, or
+  `QL_SER1_OUT=out.txt` with `OPEN #3,ser1`, `PRINT #3,...`, `CLOSE #3`
+  (SER2 the same); the host prints "SERn: x of y bytes received". On the
+  boards: a client on TCP 2301 or 2302, F1, the same lines through `T`,
+  and the program sent from the PC once `LOAD ser1z` is typed: bytes that
+  arrive while another channel on that port is open go to it (a test
+  sent them during `OPEN #3,ser2`, `CLOSE #3` threw them away, and LOAD
+  waited for good; the UART's screenshot had taken 13 s).
 - The web page's packer: `node tools/qlfiles_test.js out qui235m.zip`
   writes `out/qui235m.mdv` and `.img` (to boot with `QL_MDV1`, `QL_FLP1`).
 - Microdrives on the boards: upload the image (`curl -T x.mdv

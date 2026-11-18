@@ -128,6 +128,9 @@ bool ql_init(const ql_config_t *config)
     ql.trump_rom = config->trump_rom;
     ql_mem_init();
     ql_video_init();
+    if (!ql_ser_init() || !ql_flp_init()) {
+        return false;
+    }
 
     m68k_init();
     m68k_set_cpu_type(M68K_CPU_TYPE_68000);

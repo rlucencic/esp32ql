@@ -19,6 +19,7 @@
 #include "ql.h"
 #include "keymap.h"
 #include "rom_store.h"
+#include "serial.h"
 #include "settings.h"
 
 static const char *TAG = "main";
@@ -272,6 +273,7 @@ static void every_second(void)
     static int dirty_for;
     if (s_started) {
         keep_clock();
+        serial_start();                         /* (after the speaker's buffers: serial.c) */
     }
     if (ql_mdv_dirty() || ql_flp_dirty()) {
         if (++dirty_for >= 2) {
@@ -296,6 +298,9 @@ static void status(emu_json_t *j, int section)
         emu_json_row(j, "ROM", rom_full[settings.rom]);
         emu_json_row(j, "Floppy", settings.floppy ? "Miracle Trump Card (FLP1_, FLP2_; Toolkit 2: TK2_EXT)" :
                      "None");
+        snprintf(text, sizeof(text), "SER1 on TCP port %d%s, SER2 on %d%s", serial_tcp_port(0),
+                 serial_connected(0) ? " (connected)" : "", serial_tcp_port(1), serial_connected(1) ? " (connected)" : "");
+        emu_json_row(j, "Serial", text);
         snprintf(text, sizeof(text), "%s, screen at $%05X%s", (s.mode & 0x08) ? "256 × 256, 8 colours" :
                  "512 × 256, 4 colours", (s.mode & 0x80) ? 0x28000 : 0x20000, (s.mode & 0x02) ? ", blanked" : "");
         emu_json_row(j, "Screen", text);

@@ -16,8 +16,8 @@
 </p>
 
 <p align="center">
-  <b>Early development:</b> QDOS, SuperBASIC, the keyboard, sound, the Microdrives and floppy
-  disks work on both boards.
+  <b>Early development:</b> QDOS, SuperBASIC, the keyboard, sound, the Microdrives, floppy
+  disks and the serial ports work on both boards.
 </p>
 
 <p align="center">
@@ -115,9 +115,14 @@ core (Musashi) this one shares with the ST, the Macs and the Amiga.
   headers (type and data space), which QL zips carry in their extra
   fields. `tools/mdvtool.py` does the same for a cartridge on the PC;
   `tools/mdvcheck.py` checks one.
+- **Serial ports**: SER1 and SER2 on the network, as TCP ports 2301 and
+  2302. What the QL prints to a `ser1` channel goes out at its baud rate
+  to whoever is connected, and what the PC sends the QL receives through
+  the IPC as on a QL: `LOAD ser1z` loads a SuperBASIC program sent from
+  the PC.
 
-**Next**, in order: the keyboard by hand (Bluetooth and USB), the serial
-ports and the network if wanted.
+**Next**, in order: the keyboard by hand (Bluetooth and USB), the network
+if wanted.
 
 ## Hardware
 
@@ -159,6 +164,11 @@ cloned next to this repository.
    `<name>.mdv` and `<name>.img` with the files on them, ready to insert.
    On the PC, `tools/mdvtool.py add formatted.mdv software.zip` puts a
    zip's files on a cartridge QDOS formatted.
+8. Serial ports: connect to the board's TCP port 2301 (SER1) or 2302
+   (SER2), e.g. `nc sinclair-ql.local 2301`; bytes pass as they are, one
+   client a port. On the QL, `OPEN #3,ser1` and `PRINT #3,"hello"` send a
+   line to it; `LOAD ser1z`, then the program sent from the PC with a
+   CTRL-Z at its end, loads one.
 
 ## Development
 

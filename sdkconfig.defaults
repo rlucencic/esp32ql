@@ -115,3 +115,4 @@ CONFIG_FREERTOS_GENERATE_RUN_TIME_STATS=y
 
 # The board runtime (../esp32emu): network name
 CONFIG_EMU_HOSTNAME="sinclair-ql"
+CONFIG_LWIP_MAX_SOCKETS=16

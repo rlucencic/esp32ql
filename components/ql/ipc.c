@@ -18,14 +18,15 @@
  *      still held: QDOS repeats it), then per key a nibble of modifiers
  *      (bit 0 ALT, 1 CTRL, 2 SHIFT) and a byte, its code (ql.h's QL_KEY_*)
  *   9  keyrow: a nibble (the row as KEYROW numbers it), 8 bits back
- *   6, 7  serial 1, 2 input: a count (none here)
+ *   2, 3  open SER1, SER2 for receiving; 4, 5 close them
+ *   6, 7  serial 1, 2 input: a count (bits 5-0), then the bytes (ser.c)
  *   10 sound (64 bits of parameters: eight bytes, beep.c), 11 sound off
  */
 #include <string.h>
 #include "ql_internal.h"
 
 #define FIFO            8               /* keys waiting to be read */
-#define MAX_REPLY       128             /* bits */
+#define MAX_REPLY       200             /* bits: RDS's 8 + 23 x 8 the longest */
 #define TYPE_FRAMES     3               /* a typed key every 3 frames */
 
 static enum { LINK_COMMAND, LINK_PARAMS, LINK_REPLY } s_state;
@@ -90,13 +91,26 @@ static void execute(void)
     s_reply_len = s_reply_pos = 0;
     switch (s_command) {
     case 1: {                           /* status */
-        uint8_t status = (s_fifo_n > 0 || s_held > 0 ? 0x01 : 0) | (ql_beep_on() ? 0x02 : 0);
+        uint8_t status = (s_fifo_n > 0 || s_held > 0 ? 0x01 : 0) | (ql_beep_on() ? 0x02 : 0) |
+                         (ql_ser_waiting(0) ? 0x10 : 0) | (ql_ser_waiting(1) ? 0x20 : 0);
         reply_bits(status, 8);
         break;
     }
-    case 6: case 7:                     /* serial input: nothing waiting */
-        reply_bits(0, 8);
+    case 2: case 3:                     /* open SER1, SER2 for receiving */
+        ql_ser_open(s_command - 2, true);
         break;
+    case 4: case 5:                     /* close it */
+        ql_ser_open(s_command - 4, false);
+        break;
+    case 6: case 7: {                   /* RDS1, RDS2: how many (no framing errors), the bytes */
+        uint8_t buf[32];
+        int n = ql_ser_receive(s_command - 6, buf);
+        reply_bits(n, 8);
+        for (int i = 0; i < n; i++) {
+            reply_bits(buf[i], 8);
+        }
+        break;
+    }
     case 8: {                           /* keyboard */
         int n = s_fifo_n > 7 ? 7 : s_fifo_n;
         reply_bits(n | (s_held > 0 ? 8 : 0), 4);

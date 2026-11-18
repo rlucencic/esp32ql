@@ -4,17 +4,25 @@
 #include <stdint.h>
 #include "ql.h"
 
+/* QL_SLOW_ALLOC: buffers the CPU doesn't run in (PSRAM on the boards: the
+ * MaTouch's internal RAM is short, and 16 KB of static queues there left
+ * the speaker's I2S no DMA buffer)
+ */
 #ifdef ESP_PLATFORM
 #include "esp_log.h"
 #include "esp_attr.h"
+#include "esp_heap_caps.h"
 #define QL_LOGI(...)    ESP_LOGI("ql", __VA_ARGS__)
 #define QL_LOGW(...)    ESP_LOGW("ql", __VA_ARGS__)
 #define QL_HOT          IRAM_ATTR
+#define QL_SLOW_ALLOC(n) heap_caps_calloc(1, (n), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)
 #else
 #include <stdio.h>
+#include <stdlib.h>
 #define QL_LOGI(...)    do { printf("ql: " __VA_ARGS__); printf("\n"); } while (0)
 #define QL_LOGW(...)    do { printf("ql: warning: " __VA_ARGS__); printf("\n"); } while (0)
 #define QL_HOT
+#define QL_SLOW_ALLOC(n) calloc(1, (n))
 #endif
 
 /* ---- Time: the 68008's clocks (7.5 MHz) ---- */
@@ -101,10 +109,22 @@ int ql_mdv_motor(void);                             /* the drive turning (1, 2),
 void ql_mdv_counts(uint32_t *reads, uint32_t *writes);
 
 /* The Trump Card's floppy controller (flp.c) */
+bool ql_flp_init(void);
 void ql_flp_reset(void);
 uint8_t ql_flp_read8(uint32_t a);                   /* $1C000-$1C003 */
 void ql_flp_write8(uint32_t a, uint8_t v);          /* $1C000-$1C003, $1E000 */
 void ql_flp_status(uint8_t *light, uint8_t *track, uint32_t *reads, uint32_t *writes);
+
+/* The serial ports (ser.c) */
+bool ql_ser_init(void);
+void ql_ser_reset(void);
+void ql_ser_send(uint8_t tmode, uint8_t v, uint64_t clock);    /* $18022 in serial mode */
+bool ql_ser_busy(uint64_t clock);                   /* $18020 bit 1 */
+uint8_t ql_ser_handshake(void);                     /* $18020 bits 4, 5 */
+bool ql_ser_line(uint64_t clock);                   /* true: a byte went out (interrupt) */
+void ql_ser_open(int port, bool open);              /* IPC commands 2-5 */
+int ql_ser_waiting(int port);                       /* status bits 4, 5 */
+int ql_ser_receive(int port, uint8_t *buf);         /* RDS1/RDS2: up to 23 */
 
 /* The IPC's beeper (beep.c) */
 void ql_beep_reset(void);
