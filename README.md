@@ -78,7 +78,9 @@ core (Musashi) this one shares with the ST, the Macs and the Amiga.
   lengths come out as on a QL (`BEEP 0,50` is 189 Hz). Checked edge by edge
   against the IPC's own code run in an 8049 interpreter.
 - The keyboard: Bluetooth and USB keyboards (the Tab5 Keyboard too) by
-  position, Backspace and Delete as the QL's CTRL + ← and CTRL + →.
+  position, Backspace and Delete as the QL's CTRL + ← and CTRL + →, F6-F10
+  as SHIFT + F1-F5, Pause as CTRL + SPACE (break), the keypad's digits and
+  signs. `tools/keytest.bas` shows each key's code and the keys held.
 - The JS ROM (QDOS 1.10) and Minerva 1.98 boot to SuperBASIC on both boards
   at full speed (the Tab5's emulation core ~22% busy, the MaTouch's ~64%).
 - **Microdrives**: MDV1_ and MDV2_ with cartridge images on the SD card

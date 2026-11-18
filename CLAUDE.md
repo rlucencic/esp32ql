@@ -83,6 +83,7 @@ Memory 253, Floppy 313 (x 341, 626).
 | `components/ql/host/` | Host build: `make -C components/ql/host run`, switches in host_main.c (`QL_IO=1` logs every I/O access) |
 | `tools/mdvcheck.py` | A QLay image's slots, syncs and checksums, sector numbers, the map, the directory |
 | `tools/mdvtool.py` | `ls`, `add`: files onto a QDOS-formatted cartridge image (from zips with their QDOS headers: executables keep their type and data space; blocks spaced along the tape as QDOS spaces them) |
+| `tools/keytest.bas` | A keyboard test for the QL (SuperBASIC): 1 each key's code (INKEY$), 2 the keys held by name (KEYROW); saved as `boot` it starts itself |
 | `tools/ipc_beep.py` | beep.c against the IPC's own sound routine, run by a small 8049 interpreter from Venema's listing: `tools/ipc_beep.py ipc8049.txt [cases] [seed]` |
 | `tools/qlfiles_test.js` | qlfiles.js's test: `node tools/qlfiles_test.js [out folder] [x.zip ...]`: zips packed as the page does, both images read back and compared |
 | `docs/ql-hardware.md` | The hardware research (2026-11-18): every register, the IPC, the Microdrive, the boot, with sources |
@@ -134,7 +135,13 @@ Memory 253, Floppy 313 (x 341, 626).
   manual's KEYROW(0)). Keys from other tasks go through an event ring to
   the emulation task (`ql_ipc_frame()`); a key down queues it with the
   modifiers held then. Typed text: a character every 3 frames, from tables
-  of the ROM's plain and shifted characters.
+  of the ROM's plain and shifted characters. The boards' keyboards
+  (`main/keymap.c`): by position; Backspace CTRL+LEFT, Delete CTRL+RIGHT,
+  F6-F10 SHIFT+F1-F5 (the QL's own), Pause CTRL+SPACE (break), the keypad
+  its digits and signs (* and + with SHIFT); a key that adds a modifier
+  presses it first (the IPC reports a key with the modifiers held as it
+  goes down) and the modifiers are counted, so a real SHIFT held across
+  F6 stays down.
 - **Microdrives** (`mdv.c`; docs/ql-hardware.md 6): cartridges are QLay
   images (174930 bytes, 255 slots of 686), kept in memory, written back
   to the card 2 s after the last write (`every_second()`). Each drive's
@@ -335,6 +342,12 @@ Memory 253, Floppy 313 (x 341, 626).
   `QL_FLP_LOG=1` prints each WD1772 command and the IDs a Write Track
   writes. Quill on a disk: `TK2_EXT`, `WCOPY mdv1_ TO flp1_`, `A`; its boot
   needs `FLP_USE mdv` first, or its line 8 as `EXEC_W flp1_quill`.
+- The keyboard test: `tools/keytest.bas` as a file named `boot`, packed
+  with the web page's packer (`node -e` with `main/web/qlfiles.js`, or
+  dropped on the page) into `keytest.mdv`/`.img`: in FLP1_ (with the Trump
+  Card) or MDV1_ it starts after F1. Host: option 2 with SHIFT, CTRL, A
+  held (`QL_KEYS`) shows "SHIFT CTRL A"; option 1 typing a, A, !, LEFT,
+  SHIFT+F1, ALT+A gives 97, 65, 33, 192, 234, 255 97 (docs 4.9).
 - Sound on the host: `QL_BEEP_LOG=1` prints each INSO's eight bytes and
   KISO, `QL_WAV=out.wav` records (BEEP 30000,50 at frame 600: 189.3 Hz);
   `QL_BEEP_EDGES=p1,p2,...` prints beep.c's edges alone; `tools/ipc_beep.py

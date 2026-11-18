@@ -4,7 +4,10 @@
  * keyboard has them (the key left of 1, ` ~, is the QL's £ key), Shift,
  * Ctrl and Alt as the QL's, F1-F5, the cursor keys, Esc, Tab, Caps Lock,
  * Enter, Space. Backspace is CTRL + left (delete the character to the
- * left), Delete CTRL + right (the one under the cursor), as on the QL.
+ * left), Delete CTRL + right (the one under the cursor), as on the QL;
+ * F6-F10 are SHIFT + F1-F5 (the QL's own F6-F10), Pause/Break CTRL + SPACE
+ * (the QL's break); the keypad types its digits and signs (its * and + with
+ * SHIFT, where the QL has them).
  */
 #include <string.h>
 #include "ql.h"
@@ -18,6 +21,7 @@ typedef struct {
 
 #define K(k)        { (k), NONE }
 #define CTRL(k)     { (k), QL_KEY_CTRL }
+#define SHIFT(k)    { (k), QL_KEY_SHIFT }
 
 static const keymap_t usage_map[0x66] = {
     [0x04] = K(QL_KEY_A), [0x05] = K(QL_KEY_B), [0x06] = K(QL_KEY_C), [0x07] = K(QL_KEY_D),
@@ -50,9 +54,20 @@ static const keymap_t usage_map[0x66] = {
     [0x39] = K(QL_KEY_CAPSLOCK),
     [0x3A] = K(QL_KEY_F1), [0x3B] = K(QL_KEY_F2), [0x3C] = K(QL_KEY_F3), [0x3D] = K(QL_KEY_F4),
     [0x3E] = K(QL_KEY_F5),
+    [0x3F] = SHIFT(QL_KEY_F1), [0x40] = SHIFT(QL_KEY_F2), [0x41] = SHIFT(QL_KEY_F3),    /* F6-F10 */
+    [0x42] = SHIFT(QL_KEY_F4), [0x43] = SHIFT(QL_KEY_F5),
+    [0x48] = CTRL(QL_KEY_SPACE),        /* Pause/Break */
     [0x4C] = CTRL(QL_KEY_RIGHT),        /* Delete */
     [0x4F] = K(QL_KEY_RIGHT), [0x50] = K(QL_KEY_LEFT), [0x51] = K(QL_KEY_DOWN), [0x52] = K(QL_KEY_UP),
-    [0x58] = K(QL_KEY_ENTER),           /* keypad Enter */
+    [0x54] = K(QL_KEY_SLASH),           /* the keypad */
+    [0x55] = SHIFT(QL_KEY_8),
+    [0x56] = K(QL_KEY_MINUS),
+    [0x57] = SHIFT(QL_KEY_EQUALS),
+    [0x58] = K(QL_KEY_ENTER),
+    [0x59] = K(QL_KEY_1), [0x5A] = K(QL_KEY_2), [0x5B] = K(QL_KEY_3), [0x5C] = K(QL_KEY_4),
+    [0x5D] = K(QL_KEY_5), [0x5E] = K(QL_KEY_6), [0x5F] = K(QL_KEY_7), [0x60] = K(QL_KEY_8),
+    [0x61] = K(QL_KEY_9), [0x62] = K(QL_KEY_0),
+    [0x63] = K(QL_KEY_PERIOD),
     [0x64] = K(QL_KEY_BACKSLASH),       /* non-US \ (ISO key left of Z) */
 };
 
