@@ -19,6 +19,11 @@ uint32_t ql_now(void)
     return (uint32_t)ql.line * QL_LINE_CYCLES + ql.cycle_in_line + (ql.cpu_running ? m68k_cycles_run() : 0);
 }
 
+uint64_t ql_clock(void)
+{
+    return ql.frame_clock + ql_now();
+}
+
 /* The ZX8302's interrupt is level 2, autovectored */
 void ql_update_irq(void)
 {
@@ -177,11 +182,16 @@ static void run_cycles(int cycles)
 void ql_run_frame(void)
 {
     ql_io_frame();
-    for (ql.line = 0; ql.line < QL_LINES; ql.line++) {
+    for (ql.line = 0; ql.line < QL_LINES;) {
         run_cycles(QL_LINE_CYCLES);
+        /* the overshoot counts from the next line's start: the line's end
+         * is the next one's start (ql_now() stays right in ql_io_line())
+         */
+        ql.line++;
         ql_io_line();
     }
     ql.line = 0;
+    ql.frame_clock += QL_LINES * QL_LINE_CYCLES;
     ql_video_frame_end();
     ql.frames++;
 }
@@ -193,4 +203,6 @@ void ql_get_status(ql_status_t *status)
     status->pc = m68k_get_reg(NULL, M68K_REG_PC) & QL_ADDR_MASK;
     status->sr = m68k_get_reg(NULL, M68K_REG_SR);
     status->mode = ql.mode;
+    status->mdv_motor = ql_mdv_motor();
+    ql_mdv_counts(status->mdv_reads, status->mdv_writes);
 }

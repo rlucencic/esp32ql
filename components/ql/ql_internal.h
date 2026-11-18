@@ -40,6 +40,7 @@ typedef struct {
     uint8_t *wmap[QL_PAGES];
 
     /* Time */
+    uint64_t frame_clock;           /* clocks since power-on at this frame's start */
     int line;
     int cycle_in_line;              /* the CPU's overshoot into the next line */
     bool cpu_running;
@@ -56,6 +57,9 @@ extern ql_t ql;
 
 /* The CPU's position in the frame, in clocks */
 uint32_t ql_now(void);
+
+/* Clocks since power-on, to the CPU's position now */
+uint64_t ql_clock(void);
 
 /* Interrupts: the level the 68008 sees changed */
 void ql_update_irq(void);
@@ -79,6 +83,16 @@ void ql_ipc_reset(void);
 void ql_ipc_write(uint8_t v);       /* $18003 */
 uint8_t ql_ipc_bit(void);           /* $18020 bit 7 */
 void ql_ipc_frame(void);            /* keys and typed text, at each frame's start */
+
+/* The Microdrives (mdv.c) */
+void ql_mdv_reset(void);
+void ql_mdv_control(uint8_t v, uint64_t clock);     /* $18020 written */
+uint8_t ql_mdv_status(uint64_t clock);              /* $18020 bits 1-3 */
+uint8_t ql_mdv_read(uint64_t clock);                /* $18022/3 read */
+void ql_mdv_write(uint8_t v, uint64_t clock);       /* $18022 written */
+bool ql_mdv_gap(uint64_t clock);                    /* a gap under the head (or none turning) */
+int ql_mdv_motor(void);                             /* the drive turning (1, 2), 0 none */
+void ql_mdv_counts(uint32_t *reads, uint32_t *writes);
 
 /* Sound (sound.c) */
 void ql_sound_reset(void);

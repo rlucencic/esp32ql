@@ -16,7 +16,7 @@ Changes there need all its projects built. A Raspberry Pi 5 sibling
 The machine is our own (MIT), written from Sinclair's documentation (the QL
 Technical Guide) and the QL community's; emulators (MAME's ql.cpp is
 BSD-3-Clause; sQLux, uQLx, QLay are GPL) only to compare behaviour against,
-never copied.
+never copied. The research notes: `docs/ql-hardware.md`.
 
 ## Build, flash, debug (the Linux PC)
 
@@ -68,7 +68,11 @@ Start, `k 57` (F1), wait ~10 s (the empty `mdv1_boot` attempt), `T PRINT
 | `components/ql/io.c` | On-board I/O at $18000: the ZX8302 (interrupts, the clock, the Microdrives' select and gap: empty drives so far), MODE |
 | `components/ql/ipc.c` | The IPC (8049) at the protocol level: the link, the commands, the keyboard matrix and queue, typed text |
 | `components/ql/sound.c` | The sound ring (two samples a line, 31250 Hz; it paces the emulation) |
+| `components/ql/mdv.c` | The Microdrives: QLay images on a tape loop of gaps and records, the receiver and transmitter, writes back into the image |
 | `components/ql/host/` | Host build: `make -C components/ql/host run`, switches in host_main.c (`QL_IO=1` logs every I/O access) |
+| `tools/mdvcheck.py` | A QLay image's slots, syncs and checksums, sector numbers, the map, the directory |
+| `tools/mdvtool.py` | `ls`, `add`: files onto a QDOS-formatted cartridge image (from zips with their QDOS headers: executables keep their type and data space) |
+| `docs/ql-hardware.md` | The hardware research (2026-11-18): every register, the IPC, the Microdrive, the boot, with sources |
 | `roms/` | The ROMs (not in git; README.md says where they come from) |
 
 ## The machine
@@ -117,14 +121,30 @@ Start, `k 57` (F1), wait ~10 s (the empty `mdv1_boot` attempt), `T PRINT
   the emulation task (`ql_ipc_frame()`); a key down queues it with the
   modifiers held then. Typed text: a character every 3 frames, from tables
   of the ROM's plain and shifted characters.
-- **Microdrives, empty** (`io.c`): $18020 written: bit 1 the select clock,
-  bit 0 the select bit (shifted in as the clock falls: QDOS clocks a 1
-  then n-1 zeros for drive n, $2C50-$2C70); while one is selected, a gap
-  interrupt every 470 lines (~30 ms). QDOS then reads a header: it waits
-  up to $100 polls for $18020 bit 2 (a byte, from $18022/$18023 in turn),
-  gives up, and the drive's status says "not found" (JS $2A9C). That's
-  what lets SuperBASIC past its `mdv1_boot` at start (it waited forever
-  without gap interrupts).
+- **Microdrives** (`mdv.c`; docs/ql-hardware.md 6): cartridges are QLay
+  images (174930 bytes, 255 slots of 686), kept in memory, written back
+  to the card 2 s after the last write (`every_second()`). Each drive's
+  tape loop plays the slots in file order: GAP_A (69 byte-times of 40 us),
+  the header record (the image's $000-$01B), GAP_B (69), the block record
+  ($01C on, 624 bytes: preamble, file/block/checksum, the data's preamble,
+  512 bytes, checksum, then the image's filler), 790 byte-times a slot,
+  8.1 s a turn; it moves while its drive is selected (`ql_clock()`). A
+  slot whose record has no `$FF $FF` in its preamble is gap (erased tape:
+  a blank cartridge). $18020 write: bit 1 the select clock (the select bit,
+  bit 0, shifts in as it falls), bit 2 write, bit 3 erase; `$02` arms the
+  receiver (it syncs on the next `$FF $FF` from the head, in this record or
+  the next). Read: bit 3 gap (also with no drive or cartridge), bit 2 a
+  byte ready (the tape has carried it past), bit 1 transmit full (40 us a
+  byte). A write burst (bit 2 up to down) goes back into the image: a short
+  one with a header after its sync is the header of the slot under the
+  head (FORMAT), a long one the block of the slot whose header passed last.
+  The gap interrupt: as a gap starts, and when its mask is written as 1
+  during a gap (docs 3.2: the JS ROM needs it with an empty drive).
+  Checked on the host (JS and Minerva): FORMAT of a blank cartridge
+  ("230/251 sectors", Minerva "229/233"), SAVE, NEW, LOAD, RUN, DIR; Psion
+  Quill 2.35 boots from its cartridge, a document saved and loaded again
+  in a fresh Quill; on the Tab5 Quill from the SD card and a document saved
+  (read back from the downloaded image); the MaTouch boots Quill.
 
 ## Lessons
 
@@ -135,6 +155,17 @@ Start, `k 57` (F1), wait ~10 s (the empty `mdv1_boot` attempt), `T PRINT
   runs as fast as it can (the QL ran at 490%). `sound.c` queues silence
   until there's sound.
 
+- **FORMAT's long block is 624 bytes on tape** (a preamble, 610 bytes
+  from $261 + 1, a checksum: JS $51A6) and its verify compares all 610
+  after the first sync (JS $5354): with the block record cut at the QLay
+  layout's 538 bytes the 599th byte never came and every FORMAT "failed"
+  (`QL_STOP=5180` found it; the verify's exits at JS $50C8-$50E6).
+- **A blank cartridge must read as gap**: with zeros as data records
+  QDOS armed, never synced, and retried for ever (SuperBASIC never came);
+  erased tape is gap all the way, so it gives up as with no cartridge.
+- **Danish Quill (2.24 DK) won't save on a JS ROM** ("Dette program kan
+  kun køre på en dansk QL"): use the English 2.35 (`qui235m.zip`; the
+  djw site's ready `quill.mdv` answered HTTP 500 on 2026-11-18).
 - **Read the ROM before guessing**: the JS ROM's own routines answered
   the IPC protocol, the keyboard codes and the Microdrive registers exactly
   (`QL_IO=1` for who touches which register, `QL_DASM` to read the code,
@@ -152,6 +183,16 @@ Start, `k 57` (F1), wait ~10 s (the empty `mdv1_boot` attempt), `T PRINT
   core 1 ~21%, MaTouch ~64%); F1 and `PRINT 2+2` (console `k 57`, `T`) on
   both: 4; SuperBASIC's circles in mode 8 on the Tab5 (the README's
   picture). Not yet by hand with a Bluetooth or USB keyboard.
+- Microdrives on the host: `head -c 174930 /dev/zero > blank.mdv`,
+  `QL_MDV1=blank.mdv QL_KEYS="150:57:1;155:57:0" QL_TYPE='600:FORMAT
+  mdv1_test\n'` (3000 frames), then `tools/mdvcheck.py blank.mdv`. Quill:
+  a cartridge from `qui235m.zip` (`tools/mdvtool.py add <formatted>.mdv
+  qui235m.zip`) in MDV1_, F1: Quill's editor by frame ~2000; F3 then S
+  (`QL_KEYS` 60, 35) and a name to save, F3 then L (24) to load.
+- Microdrives on the boards: upload the image (`curl -T x.mdv
+  http://sinclair-ql.local/disks/`), insert (`curl -X PUT --data "x.mdv"
+  .../api/drive/1`), Start, `k 57`; the image back with `curl -o
+  .../disks/x.mdv` (it may 404 for a moment while the board writes it).
 
 ## Working with the user
 

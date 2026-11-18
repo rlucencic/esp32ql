@@ -15,19 +15,20 @@
 </p>
 
 <p align="center">
-  <b>Early development:</b> QDOS and SuperBASIC run with the keyboard on both boards; the
-  Microdrives and sound are being written now.
+  <b>Early development:</b> QDOS, SuperBASIC, the keyboard and the Microdrives work on both
+  boards; sound and floppy disks are next.
 </p>
 
 <p align="center">
+  <img alt="Psion Quill 2.35 on the Tab5, loaded from a Microdrive cartridge image: a document typed and saved, Quill asking Same document?" src="docs/images/tab5-quill-saved.png" width="49%">
   <img alt="SuperBASIC in mode 8 on the Tab5: a FOR loop drawing 70 circles in the seven inks" src="docs/images/tab5-basic-circles.png" width="49%">
-  <img alt="SuperBASIC on the MaTouch: PRINT 2+2 typed in the command window, 4 in the output window" src="docs/images/matouch-basic-print.png" width="49%">
   <br>
-  <img alt="The QL's start-up question on the Tab5: F1...monitor, F2...TV, (c) 1983 Sinclair Research Ltd" src="docs/images/tab5-f1f2.png" width="49%">
+  <img alt="SuperBASIC on the MaTouch: PRINT 2+2 typed in the command window, 4 in the output window" src="docs/images/matouch-basic-print.png" width="49%">
   <img alt="The setup screen on the Tab5: ROM JS or Minerva, Memory 128 KB or 640 KB, Sound" src="docs/images/tab5-setup.png" width="49%">
   <br>
-  <sub>SuperBASIC drawing circles in mode 8 (256 × 256, eight colours) on the Tab5, PRINT 2+2 on the
-  MaTouch, the JS ROM's start-up question and the setup screen. Screenshots from the boards.</sub>
+  <sub>Psion Quill 2.35 from a Microdrive cartridge on the Tab5, a document just saved back to it;
+  SuperBASIC drawing circles in mode 8 (256 × 256, eight colours); PRINT 2+2 on the MaTouch; the
+  setup screen. Screenshots from the boards.</sub>
 </p>
 
 esp32ql turns the Makerfabs MaTouch ESP32-S3 Parallel TFT with Touch 7", or an
@@ -69,11 +70,20 @@ core (Musashi) this one shares with the ST, the Macs and the Amiga.
 - The keyboard: Bluetooth and USB keyboards (the Tab5 Keyboard too) by
   position, Backspace and Delete as the QL's CTRL + ← and CTRL + →.
 - The JS ROM (QDOS 1.10) and Minerva 1.98 boot to SuperBASIC on both boards
-  at full speed (the Tab5's emulation core ~22% busy, the MaTouch's ~64%);
-  an empty Microdrive answers "not found" for `mdv1_boot`.
+  at full speed (the Tab5's emulation core ~22% busy, the MaTouch's ~64%).
+- **Microdrives**: MDV1_ and MDV2_ with cartridge images on the SD card
+  (QLay `.mdv`, 174930 bytes, the format of the QL software collections),
+  a tape loop with its gaps and records under the ZX8302's control:
+  FORMAT (a blank cartridge from the setup screen or web page gives ~230
+  sectors, as a real one does), SAVE, LOAD, DIR, and cartridges booting
+  their `BOOT` program. Psion Quill 2.35 loads from its cartridge, and a
+  document saved in it comes back. Written cartridges go back to the card
+  two seconds after the last write.
+- `tools/mdvtool.py` puts QL software from a zip (with the QDOS headers QL
+  zips keep) onto a cartridge image; `tools/mdvcheck.py` checks one.
 
-**Next**, in order: the Microdrives (`.mdv` cartridge images), sound,
-and original software (Psion Quill: a document saved and loaded again).
+**Next**, in order: floppy disks, QL zips turned into cartridges on the web
+page, sound.
 
 ## Hardware
 
@@ -101,7 +111,15 @@ cloned next to this repository.
 3. On the setup screen choose the ROM and memory and tap Start. The web page
    is at `http://sinclair-ql.local`.
 4. Answer the QL's question with F1 (monitor) or F2 (TV) on a Bluetooth or
-   USB keyboard; SuperBASIC follows.
+   USB keyboard; SuperBASIC follows (it first looks for `mdv1_boot`: a
+   cartridge with one in MDV1_ starts its program).
+5. Cartridges: copy `.mdv` images into the SD card's `ql` folder, or upload
+   them on the web page; insert them in MDV1_ or MDV2_ from the setup
+   screen's Drives page or the web page. A new, blank cartridge needs
+   `FORMAT mdv1_name` first. To put QL software from a zip on one:
+   ```sh
+   tools/mdvtool.py add formatted.mdv software.zip
+   ```
 
 ## Development
 

@@ -13,7 +13,7 @@
  *                          instructions before, the registers, and exit
  *   QL_TRACE=<pc>:<n>      from pc on, the next n instructions
  *   QL_IO=1                every access to the on-board I/O
- *   QL_TYPE=<frame>:<text> type text from that frame (\n is ENTER)
+ *   QL_TYPE=<frame>:<text>[|...]  type text from that frame (\n is ENTER)
  *   QL_KEYS=<frame>:<key>:<0|1>[;...]  matrix keys down or up
  *   QL_MDV1, QL_MDV2       cartridge images (written: use copies)
  *   QL_WAV=<file>          the sound
@@ -212,29 +212,35 @@ int main(int argc, char **argv)
 
     uint32_t log_every = getenv("QL_LOG") ? strtoul(getenv("QL_LOG"), NULL, 10) : 0;
     uint32_t shots = getenv("QL_SHOTS") ? strtoul(getenv("QL_SHOTS"), NULL, 10) : 0;
-    const char *type = getenv("QL_TYPE");
-    uint32_t type_frame = type ? strtoul(type, NULL, 10) : 0;
-    const char *type_text = type && strchr(type, ':') ? strchr(type, ':') + 1 : NULL;
-    static char text[512];
-    if (type_text) {
+    /* QL_TYPE=<frame>:<text>[|<frame>:<text>...] */
+    enum { TYPES = 16 };
+    static char texts[TYPES][256];
+    uint32_t type_frames[TYPES];
+    int types = 0, typed = 0;
+    for (const char *e = getenv("QL_TYPE"); e && *e && types < TYPES;) {
+        type_frames[types] = strtoul(e, NULL, 10);
+        const char *s = strchr(e, ':');
+        if (s == NULL) {
+            break;
+        }
         size_t k = 0;
-        for (const char *s = type_text; *s && k < sizeof(text) - 1; s++) {
+        for (s++; *s && *s != '|' && k < sizeof(texts[0]) - 1; s++) {
             if (s[0] == '\\' && s[1] == 'n') {
-                text[k++] = '\n';
+                texts[types][k++] = '\n';
                 s++;
             } else {
-                text[k++] = *s;
+                texts[types][k++] = *s;
             }
         }
-        text[k] = 0;
+        texts[types][k] = 0;
+        types++;
+        e = *s == '|' ? s + 1 : NULL;
     }
 
     for (s_frame = 0; s_frame < frames; s_frame++) {
         keys_for_frame(s_frame);
-        if (type_text && s_frame >= type_frame) {
-            if (ql_type(text)) {
-                type_text = NULL;
-            }
+        if (typed < types && s_frame >= type_frames[typed] && ql_type(texts[typed])) {
+            typed++;
         }
         ql_run_frame();
         if (s_wav) {
