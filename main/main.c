@@ -1,0 +1,319 @@
+/*
+ * Sinclair QL emulator on the Makerfabs MaTouch ESP32-S3 7" and the M5Stack
+ * Tab5.
+ *
+ * The board side (tasks, LCD, touch, WiFi, Bluetooth, setup screen, web
+ * page, console) is the shared runtime in ../esp32emu; this file plugs the
+ * QL into it: memory, ROMs, settings, keyboard map, Microdrives, status.
+ */
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <strings.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "esp_heap_caps.h"
+#include "esp_log.h"
+#include "emu/emu.h"
+#include "ql.h"
+#include "keymap.h"
+#include "rom_store.h"
+#include "settings.h"
+
+static const char *TAG = "main";
+
+static const char *const rom_names[] = { "JS", "Minerva", "" };
+static const char *const rom_full[] = { "Sinclair JS (QDOS 1.10)", "Minerva 1.98" };
+static const char *const memory_names[] = { "128 KB", "640 KB", "" };
+
+static ql_config_t s_cfg;
+static uint8_t *s_rom;
+static bool s_started;
+
+/* ---- Memory ----
+ *
+ * Everything at power-on, before the screen, WiFi and Bluetooth fragment
+ * PSRAM: the ROM, 640 KB of RAM whatever the setting, the CPU core's tables.
+ */
+static void reserve_memory(void)
+{
+    settings_load();
+    s_rom = heap_caps_malloc(QL_ROM_SIZE, MALLOC_CAP_SPIRAM);
+    s_cfg.ram = heap_caps_malloc(QL_RAM_640K, MALLOC_CAP_SPIRAM);
+    s_cfg.opcode_tables = heap_caps_malloc(QL_OPCODE_TABLES_SIZE, MALLOC_CAP_SPIRAM);
+}
+
+static void storage(bool sd_card)
+{
+    emu_set_drive_info(sd_card ? "Microdrive cartridges on the SD card" : "No SD card: no Microdrives");
+}
+
+/* ---- Starting ---- */
+
+static bool start(void)
+{
+    if (s_rom == NULL || s_cfg.ram == NULL) {
+        emu_set_message("Not enough memory: see the log.");
+        return false;
+    }
+    if (!rom_store_load(settings.rom, s_rom)) {
+        static char message[160];
+        snprintf(message, sizeof(message), "No %s ROM: put %s into roms/ and flash with idf.py flash.",
+                 rom_names[settings.rom], rom_store_name(settings.rom));
+        emu_set_message(message);
+        return false;
+    }
+    s_cfg.rom = s_rom;
+    s_cfg.ram_size = settings.memory ? QL_RAM_640K : QL_RAM_128K;
+    if (!ql_init(&s_cfg)) {
+        emu_set_message("The QL could not be set up: see the log.");
+        return false;
+    }
+    s_started = true;
+    ESP_LOGI(TAG, "%s, %s", rom_full[settings.rom], memory_names[settings.memory]);
+    return true;
+}
+
+static void screen_mode(emu_screen_t *mode)
+{
+    mode->width = QL_SCREEN_WIDTH;
+    mode->height = QL_SCREEN_HEIGHT;
+    mode->hz = QL_SCREEN_HZ;
+}
+
+/* ---- Setup screen choices ---- */
+
+static int rom_get(void)
+{
+    return settings.rom;
+}
+
+static void rom_set(int i)
+{
+    if (i >= 0 && i < ROM_COUNT) {
+        settings.rom = i;
+        settings_save();
+    }
+}
+
+static int memory_get(void)
+{
+    return settings.memory;
+}
+
+static void memory_set(int i)
+{
+    if (i >= 0 && i <= 1) {
+        settings.memory = i;
+        settings_save();
+    }
+}
+
+static const emu_choice_t choices[] = {
+    { "ROM", rom_names, rom_get, rom_set, false },
+    { "Memory", memory_names, memory_get, memory_set, false },
+};
+
+/* ---- Microdrives ---- */
+
+enum { DRIVE_MDV1, DRIVE_MDV2, DRIVES };
+
+static const char *const extensions[] = { ".mdv", NULL };
+static const char *const drive_names[] = { "MDV1_", "MDV2_" };
+#define MDV_BYTES       174930          /* a blank cartridge image */
+static const disks_size_t sizes[] = {
+    { MDV_BYTES, "Microdrive cartridge (.MDV)" },
+};
+
+static bool insert(int drive, const char *path)
+{
+    return ql_mdv_insert(drive, path);
+}
+
+static void eject(int drive)
+{
+    ql_mdv_eject(drive);
+}
+
+static const char *path(int drive)
+{
+    return ql_mdv_path(drive);
+}
+
+static bool write_protected(int drive)
+{
+    return ql_mdv_write_protected(drive);
+}
+
+static bool create(const char *path, uint32_t bytes)
+{
+    (void)bytes;
+    return ql_mdv_create(path);
+}
+
+static const disks_config_t disks = {
+    .folder = "ql",
+    .extensions = extensions,
+    .description = "Microdrive cartridges (.MDV)",
+    .title = "Microdrives",
+    .button = "Drives",
+    .nvs_namespace = "qldisks",
+    .drives = DRIVES,
+    .drive_names = drive_names,
+    .new_prefix = "BLANK",
+    .new_extension = ".mdv",
+    .sizes = sizes,
+    .size_count = sizeof(sizes) / sizeof(sizes[0]),
+    .max_upload = 4 * 1024 * 1024,
+    .insert = insert,
+    .eject = eject,
+    .path = path,
+    .write_protected = write_protected,
+    .create = create,
+};
+
+/* Cartridge writes go to the SD card from here (core 0), between frames,
+ * once nothing has been written for a second
+ */
+static void flush(void *arg)
+{
+    ql_mdv_flush();
+}
+
+static void every_second(void)
+{
+    static int dirty_for;
+    if (ql_mdv_dirty()) {
+        if (++dirty_for >= 2) {
+            emu_paused(flush, NULL);
+            dirty_for = 0;
+        }
+    } else {
+        dirty_for = 0;
+    }
+}
+
+/* ---- Status ---- */
+
+static void status(emu_json_t *j, int section)
+{
+    char text[160];
+    ql_status_t s;
+    ql_get_status(&s);
+    if (section == EMU_STATUS_ROWS) {
+        snprintf(text, sizeof(text), "Sinclair QL, %s", memory_names[settings.memory]);
+        emu_json_row(j, "System", text);
+        emu_json_row(j, "ROM", rom_full[settings.rom]);
+        snprintf(text, sizeof(text), "%s, screen at $%05X%s", (s.mode & 0x08) ? "256 × 256, 8 colours" :
+                 "512 × 256, 4 colours", (s.mode & 0x80) ? 0x28000 : 0x20000, (s.mode & 0x02) ? ", blanked" : "");
+        emu_json_row(j, "Screen", text);
+        return;
+    }
+    for (int d = 0; d < DRIVES; d++) {
+        const char *name = disks_name(d);
+        emu_json_drive(j, drive_names[d], name, ql_mdv_write_protected(d), s.mdv_motor == d + 1,
+                       s.mdv_reads[d], s.mdv_writes[d], NULL);
+    }
+}
+
+/* ---- Console ---- */
+
+static void console_info(char *buf, size_t len)
+{
+    ql_status_t s;
+    ql_get_status(&s);
+    snprintf(buf, len, "frames %lu PC $%05lX SR %04X mode %02X", (unsigned long)s.frames, (unsigned long)s.pc, s.sr,
+             s.mode);
+}
+
+/*   k <n>              tap matrix key n (row * 8 + column)
+ *   K <n> <0|1>        key n down (1) or up (0)
+ *   T <text>           type text (\n is ENTER)
+ *   R <rom> [memory]   restart with ROM 0 JS, 1 Minerva; memory 0 128 KB, 1 640 KB
+ */
+static bool console_command(const char *line)
+{
+    switch (line[0]) {
+    case 'k': {
+        unsigned key = strtoul(line + 1, NULL, 10);
+        ql_key(key, true);
+        vTaskDelay(pdMS_TO_TICKS(100));
+        ql_key(key, false);
+        return true;
+    }
+    case 'K': {
+        unsigned key = 0, down = 0;
+        if (sscanf(line + 1, "%u %u", &key, &down) == 2) {
+            ql_key(key, down);
+        }
+        return true;
+    }
+    case 'T': {
+        static char text[200];
+        const char *s = line + 1;
+        while (*s == ' ') {
+            s++;
+        }
+        size_t n = 0;
+        for (; *s && n < sizeof(text) - 1; s++) {
+            if (s[0] == '\\' && s[1] == 'n') {
+                text[n++] = '\n';
+                s++;
+            } else {
+                text[n++] = *s;
+            }
+        }
+        text[n] = 0;
+        ql_type(text);
+        return true;
+    }
+    case 'R': {
+        int rom = 0, memory = settings.memory;
+        if (sscanf(line + 1, "%d %d", &rom, &memory) >= 1 && rom >= 0 && rom < ROM_COUNT && memory >= 0 &&
+            memory <= 1) {
+            settings.rom = rom;
+            settings.memory = memory;
+            settings_save();
+            emu_restart();
+        }
+        return true;
+    }
+    default:
+        return false;
+    }
+}
+
+/* ---- The machine ---- */
+
+static const emu_machine_t machine = {
+    .name = "Sinclair QL",
+    .short_name = "QL",
+    .view_width = 800,                  /* 512 x 256 on a 4:3 screen */
+    .scale = EMU_SCALE_SMOOTH,
+    .reserve_memory = reserve_memory,
+    .storage = storage,
+    .start = start,
+    .reset = ql_reset,
+    .run_frame = ql_run_frame,
+    .halted = ql_halted,
+    .screen_mode = screen_mode,
+    .screen_signature = ql_screen_signature,
+    .render_line = ql_render_line_rgb565,
+    .audio_hz = QL_AUDIO_HZ,
+    .audio_enable = ql_audio_enable,
+    .audio_render = ql_audio_render,
+    .audio_pending = ql_audio_pending,
+    .hid_key = keymap_hid_key,
+    .choices = choices,
+    .choice_count = sizeof(choices) / sizeof(choices[0]),
+    .disks = &disks,
+    .status = status,
+    .console_info = console_info,
+    .console_command = console_command,
+    .every_second = every_second,
+};
+
+void app_main(void)
+{
+    emu_run(&machine);
+}

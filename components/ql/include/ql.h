@@ -1,0 +1,80 @@
+#pragma once
+
+/*
+ * Sinclair QL: a 68008 at 7.5 MHz, 128 KB RAM (up to 640 KB here), 48 KB
+ * ROM, the ZX8301 (display, DRAM), the ZX8302 (clock, interrupts,
+ * Microdrives, serial out, the link to the IPC), the IPC (an 8049:
+ * keyboard, sound, serial in) and two Microdrives. Platform independent: the
+ * board's main.c and the host build (host/) drive it.
+ */
+#include <stdbool.h>
+#include <stddef.h>
+#include <stdint.h>
+
+#define QL_ROM_SIZE             (48 * 1024)     /* $00000-$0BFFF */
+#define QL_RAM_BASE             0x20000
+#define QL_RAM_128K             (128 * 1024)
+#define QL_RAM_640K             (640 * 1024)    /* 512 KB expansion from $40000 */
+
+/* The picture: always 512 x 256 (mode 8's pixels twice as wide) */
+#define QL_SCREEN_WIDTH         512
+#define QL_SCREEN_HEIGHT        256
+#define QL_SCREEN_HZ            50
+
+/* Copies of the CPU core's opcode tables (handler pointers and cycles) */
+#define QL_OPCODE_TABLES_SIZE   0x50000
+
+/* Sound: 16-bit stereo */
+#define QL_AUDIO_HZ             31250
+
+#define QL_MDV_DRIVES           2
+
+typedef struct {
+    const uint8_t *rom;         /* QL_ROM_SIZE bytes */
+    uint8_t *ram;               /* ram_size bytes, from $20000 */
+    uint32_t ram_size;          /* QL_RAM_128K or QL_RAM_640K */
+    /* QL_OPCODE_TABLES_SIZE bytes for copies of the CPU core's tables in
+     * faster memory (NULL: the built-in ones)
+     */
+    void *opcode_tables;
+} ql_config_t;
+
+bool ql_init(const ql_config_t *config);
+void ql_reset(void);
+void ql_run_frame(void);
+bool ql_halted(void);
+
+/* ---- Display ---- */
+uint32_t ql_screen_signature(void);
+void ql_render_line_rgb565(int y, uint16_t *dst);
+
+/* ---- Keyboard: the QL's keys by matrix position (row * 8 + column) ---- */
+void ql_key(int key, bool down);
+/* Type text (\n is ENTER) a key at a time; false while still typing */
+bool ql_type(const char *text);
+
+/* ---- Sound ---- */
+void ql_audio_enable(bool on);
+int ql_audio_render(int16_t *dst, int frames);
+int ql_audio_pending(void);
+
+/* ---- Microdrives: cartridge images (drive 0 is MDV1_) ---- */
+bool ql_mdv_insert(int drive, const char *path);
+void ql_mdv_eject(int drive);
+const char *ql_mdv_path(int drive);
+bool ql_mdv_write_protected(int drive);
+bool ql_mdv_create(const char *path);       /* a blank, unformatted cartridge */
+bool ql_mdv_dirty(void);                    /* written since the last flush */
+void ql_mdv_flush(void);                    /* written cartridges to their files */
+
+/* ---- Status ---- */
+typedef struct {
+    uint32_t frames;
+    uint32_t pc;
+    uint16_t sr;
+    uint8_t mode;               /* the ZX8301's MODE register */
+    uint8_t mdv_motor;          /* the drive turning (1, 2), 0 none */
+    uint32_t mdv_reads[QL_MDV_DRIVES], mdv_writes[QL_MDV_DRIVES];
+} ql_status_t;
+
+void ql_get_status(ql_status_t *status);
