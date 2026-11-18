@@ -51,6 +51,16 @@ static uint32_t rtc(void)
     return (uint32_t)time(NULL) + RTC_1961 + s_rtc_offset;
 }
 
+int32_t ql_rtc_offset(void)
+{
+    return s_rtc_offset;
+}
+
+void ql_rtc_set_offset(int32_t seconds)
+{
+    s_rtc_offset = seconds;
+}
+
 /* A gap passing with its interrupt enabled */
 static void gap_check(uint64_t clock, bool mask_written)
 {
@@ -60,6 +70,28 @@ static void gap_check(uint64_t clock, bool mask_written)
         ql_update_irq();
     }
     s_gap = gap;
+}
+
+/* $18021's top bits as Minerva's inc/pc describes them (JS ignores them):
+ * bit 7 the transmit baud clock, up and down once a bit (Minerva counts 12
+ * of its rises before it turns from a serial port back to the
+ * Microdrives), bit 6 1 unless a Microdrive turns, bit 5 the lowest bit of
+ * a 65536 Hz count
+ */
+static uint8_t status_top(uint64_t clock)
+{
+    static const uint32_t baud[8] = { 19200, 9600, 4800, 2400, 1200, 600, 300, 75 };
+    uint8_t v = 0;
+    if ((clock * baud[s_tmode & 7] * 2 / QL_CPU_HZ) & 1) {
+        v |= 0x80;
+    }
+    if (!ql_mdv_motor()) {
+        v |= 0x40;
+    }
+    if ((clock * 65536 / QL_CPU_HZ) & 1) {
+        v |= 0x20;
+    }
+    return v;
 }
 
 uint8_t ql_io_read8(uint32_t a)
@@ -73,7 +105,7 @@ uint8_t ql_io_read8(uint32_t a)
         v = (ql_ipc_bit() << 7) | ql_mdv_status(ql_clock());
         break;
     case 0x18021:
-        v = s_int_status;
+        v = s_int_status | status_top(ql_clock());
         break;
     case 0x18022: case 0x18023:
         v = ql_mdv_read(ql_clock());

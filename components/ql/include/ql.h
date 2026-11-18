@@ -104,6 +104,12 @@ bool ql_flp_create(const char *path);       /* a blank 720 KB disk, for FORMAT *
 bool ql_flp_dirty(void);
 void ql_flp_flush(void);
 
+/* ---- The clock: the host's time plus an offset (seconds) that setting
+ * it on the QL (SDATE, ADATE) changes; the board keeps it across restarts
+ */
+int32_t ql_rtc_offset(void);
+void ql_rtc_set_offset(int32_t seconds);
+
 /* ---- Status ---- */
 typedef struct {
     uint32_t frames;

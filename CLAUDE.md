@@ -37,7 +37,8 @@ bash -c '. ~/.espressif/tools/activate_idf_v5.5.6.sh >/dev/null 2>&1; idf.py bui
   trumpcard.rom slot 2 (32 KB). A file of the same name in the SD card's
   `ql/roms` overrides one; cartridges (`.mdv`) and floppy disks (`.img`)
   are in `ql/`.
-- NVS: namespace `ql` (`rom`, `memory`, `floppy`), drives `qldisks`. mDNS
+- NVS: namespace `ql` (`rom`, `memory`, `floppy`, `rtc_ofs`: the QL's
+  clock less the board's, in seconds), drives `qldisks`. mDNS
   `sinclair-ql.local` (the second board running it: `sinclair-ql-2.local`;
   `/api/info`'s `board` says which). Drives in the web API: 1 MDV1_, 2
   MDV2_, 3 FLP1_, 4 FLP2_; a blank floppy: `curl -X POST
@@ -108,6 +109,21 @@ Memory 253, Floppy 313 (x 341, 626).
   screen ($28000), bit 1 blank. Frames that changed the screen are copied
   into one of three snapshots; the presenter draws the latest. Checked: the
   JS ROM's F1/F2 screen in the right colours.
+- **Minerva** (1.98; docs/ql-hardware.md 7.6): its start options work as
+  they are: F1/F2, F3/F4 dual screen (the system variables at $30000,
+  through its software reset: TRAP #0, RESET, the reset vectors; the
+  RESET instruction leaves the CPU's registers), SHIFT for 128 KB only
+  (RAMTOP $40000 on a 640 KB machine), the prompt timing out to TV mode
+  after ~10 s; in dual-screen mode $18063 bit 7 shows the second screen
+  ($28000). Checked on the host, the serial-then-Microdrive case and the
+  clock also on the MaTouch.
+- **The clock**: $18000-$18003 read the host's time (seconds from 1961)
+  plus an offset; writing $18000 zeroes it, $18001 steps its bytes
+  (SDATE, ADATE). `ql_rtc_offset()`: the board keeps the offset in NVS
+  once it has stood for 2 s (SDATE steps it a byte at a time), and sets
+  it again at each start (`keep_clock()` in main.c; the log says "the
+  QL's clock: N s off the board's"). Checked: SDATE 2001,2,3,4,5,6 with
+  JS and Minerva (host), on the MaTouch kept across a restart, ADATE back.
 - **Interrupts**: the ZX8302's at level 2, autovectored. $18021 read: bit 0
   gap, 1 interface, 2 transmit, 3 frame, 4 external (QDOS's handler at JS
   $35E tests them in that order); write: bits 0-4 clear those, bits 5-7
@@ -161,6 +177,9 @@ Memory 253, Floppy 313 (x 341, 626).
   head (FORMAT), a long one the block of the slot whose header passed last.
   The gap interrupt: as a gap starts, and when its mask is written as 1
   during a gap (docs 3.2: the JS ROM needs it with an empty drive).
+  $18021's top bits on read (Minerva's inc/pc; JS ignores them): bit 7
+  the transmit baud clock ($18002's rate), up and down once a bit; bit 6
+  1 unless a Microdrive turns; bit 5 a 65536 Hz count's lowest bit.
   Checked on the host (JS and Minerva): FORMAT of a blank cartridge
   ("230/251 sectors", Minerva "229/233"), SAVE, NEW, LOAD, RUN, DIR; Psion
   Quill 2.35 boots from its cartridge, a document saved and loaded again
@@ -292,6 +311,11 @@ Memory 253, Floppy 313 (x 341, 626).
   LOAD and EXEC read a whole file in any order, so Quill itself loaded
   fine. QDOS puts each next block 13 slots further on (the collection's
   cartridges): mdvtool does too now (the same COPY in ~70 s).
+- **Minerva counts the baud clock before it turns back to the
+  Microdrives**: after serial output it waits for 12 rises of $18021 bit
+  7 (Minerva $078E-$07B2), which read 0 here: `OPEN #3,ser1: PRINT #3,...:
+  CLOSE #3` then `DIR mdv1_` hung in `tst.b $18021 / bpl` for good. JS
+  never looks at the bit.
 - **A beep's pitch is the IPC's routine time too**: the timer is loaded
   with the half period's ticks only after the interrupt routine has run
   its course, so its 252 machine cycles or more (by path) add to every
@@ -348,6 +372,14 @@ Memory 253, Floppy 313 (x 341, 626).
   Card) or MDV1_ it starts after F1. Host: option 2 with SHIFT, CTRL, A
   held (`QL_KEYS`) shows "SHIFT CTRL A"; option 1 typing a, A, !, LEFT,
   SHIFT+F1, ALT+A gives 97, 65, 33, 192, 234, 255 97 (docs 4.9).
+- Minerva on the host: `QL_RAM_KB=640 QL_KEYS="900:57:1;905:57:0"` (F1
+  after its RAM test; 60 for F3, dual screen; 0 held with it for 128 KB
+  only); `PRINT PEEK_L(163872)` is RAMTOP ($28020) in single-screen mode,
+  `PEEK_L(196640)` ($30020) in dual. A serial port, then the Microdrive:
+  `OPEN #3,ser1` / `PRINT #3,"hello"` / `CLOSE #3` / `DIR mdv1_` (each its
+  own line: JS takes `ser1:` with a statement after it for a name).
+  `QL_RTC_OFFSET` starts the clock off; the host prints the offset at the
+  end.
 - Sound on the host: `QL_BEEP_LOG=1` prints each INSO's eight bytes and
   KISO, `QL_WAV=out.wav` records (BEEP 30000,50 at frame 600: 189.3 Hz);
   `QL_BEEP_EDGES=p1,p2,...` prints beep.c's edges alone; `tools/ipc_beep.py

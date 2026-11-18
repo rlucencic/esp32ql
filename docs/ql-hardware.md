@@ -1215,6 +1215,11 @@ sources, TG 2.4, the QL Service Manual section 4 ("SM").
   $18021 bit 7 to toggle (baud clock) after serial output (3.1).
 - Same IPC protocol (pipelined), same microdrive format and sequences,
   wider read tolerance (20-80 us a byte).
+- Checked in the emulator (2026-11-18): F3 dual screen (system variables
+  at $30000), SHIFT for 128 KB, the time-out to TV mode, and the baud
+  clock: without $18021 bit 7 toggling, `DIR mdv1_` after serial output
+  hangs at Minerva $07AA (`tst.b $18021 / bpl`), the 12-rise count at
+  $07A0-$07B2 after waiting for the transmitter to empty.
 
 ### 7.7 Minimum hardware to reach the SuperBASIC cursor
 

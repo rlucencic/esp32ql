@@ -16,6 +16,7 @@
  *   QL_TYPE=<frame>:<text>[|...]  type text from that frame (\n is ENTER)
  *   QL_KEYS=<frame>:<key>:<0|1>[;...]  matrix keys down or up
  *   QL_MDV1, QL_MDV2       cartridge images (written: use copies)
+ *   QL_RTC_OFFSET=<s>      the clock's offset from the host's time (printed at the end)
  *   QL_TRUMP=<rom>         a Trump Card with that ROM (floppy disks, Toolkit 2)
  *   QL_FLP1, QL_FLP2       its disk images (written: use copies)
  *   QL_WAV=<file>          the sound
@@ -236,6 +237,9 @@ int main(int argc, char **argv)
             fprintf(stderr, "can't insert %s\n", path);
         }
     }
+    if (getenv("QL_RTC_OFFSET")) {
+        ql_rtc_set_offset(atol(getenv("QL_RTC_OFFSET")));
+    }
     for (int d = 0; d < QL_FLP_DRIVES; d++) {
         const char *path = getenv(d == 0 ? "QL_FLP1" : "QL_FLP2");
         if (path && !ql_flp_insert(d, path)) {
@@ -321,6 +325,9 @@ int main(int argc, char **argv)
     ql_status_t s;
     ql_get_status(&s);
     printf("after %u frames: PC $%05lx SR %04x mode %02x\n", s_frame, (unsigned long)s.pc, s.sr, s.mode);
+    if (ql_rtc_offset()) {
+        printf("clock offset now %ld s\n", (long)ql_rtc_offset());
+    }
     if (cfg.trump_rom) {
         printf("floppies: %u/%u sectors read, %u/%u written (tracks formatted count too)\n", s.flp_reads[0],
                s.flp_reads[1], s.flp_writes[0], s.flp_writes[1]);

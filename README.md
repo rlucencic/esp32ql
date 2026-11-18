@@ -82,7 +82,10 @@ core (Musashi) this one shares with the ST, the Macs and the Amiga.
   as SHIFT + F1-F5, Pause as CTRL + SPACE (break), the keypad's digits and
   signs. `tools/keytest.bas` shows each key's code and the keys held.
 - The JS ROM (QDOS 1.10) and Minerva 1.98 boot to SuperBASIC on both boards
-  at full speed (the Tab5's emulation core ~22% busy, the MaTouch's ~64%).
+  at full speed (the Tab5's emulation core ~22% busy, the MaTouch's ~64%);
+  Minerva's start options too (F3/F4 two screens, SHIFT for 128 KB). The
+  QL's clock follows the board's, and once set with SDATE or ADATE the
+  board keeps the difference.
 - **Microdrives**: MDV1_ and MDV2_ with cartridge images on the SD card
   (QLay `.mdv`, 174930 bytes, the format of the QL software collections),
   a tape loop with its gaps and records under the ZX8302's control:
@@ -105,8 +108,8 @@ core (Musashi) this one shares with the ST, the Macs and the Amiga.
   fields. `tools/mdvtool.py` does the same for a cartridge on the PC;
   `tools/mdvcheck.py` checks one.
 
-**Next**, in order: the keyboard by hand (Bluetooth and USB), Minerva's
-differences, more original software.
+**Next**, in order: the keyboard by hand (Bluetooth and USB), more
+original software, timing (the ZX8301's contention).
 
 ## Hardware
 

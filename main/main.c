@@ -84,6 +84,7 @@ static bool start(void)
         emu_set_message("The QL could not be set up: see the log.");
         return false;
     }
+    ql_rtc_set_offset(settings.rtc_ofs);
     s_started = true;
     ESP_LOGI(TAG, "%s, %s%s", rom_full[settings.rom], memory_names[settings.memory],
              settings.floppy ? ", a Trump Card" : "");
@@ -245,9 +246,33 @@ static void flush(void *arg)
     ql_flp_flush();
 }
 
+/* The QL's clock set (SDATE steps it a byte at a time): kept once it has
+ * stood for two seconds
+ */
+static void keep_clock(void)
+{
+    static int32_t last;
+    static int still;
+    int32_t now = ql_rtc_offset();
+    if (now == settings.rtc_ofs) {
+        still = 0;
+    } else if (now != last) {
+        last = now;
+        still = 0;
+    } else if (++still >= 2) {
+        settings.rtc_ofs = now;
+        settings_save();
+        ESP_LOGI(TAG, "the QL's clock: %ld s off the board's", (long)now);
+        still = 0;
+    }
+}
+
 static void every_second(void)
 {
     static int dirty_for;
+    if (s_started) {
+        keep_clock();
+    }
     if (ql_mdv_dirty() || ql_flp_dirty()) {
         if (++dirty_for >= 2) {
             emu_paused(flush, NULL);

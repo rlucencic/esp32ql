@@ -8,13 +8,13 @@ checked) and leaves this list.
    (`keytest.img` is in both boards' FLP1_ since 2026-11-18): every key in
    option 2 (its name: position and KEYROW), option 1 for the codes
    (modifiers, F6-F10, the keypad, Backspace/Delete), autorepeat, CTRL +
-   SPACE breaking a program; the Tab5 Keyboard too. KEYROW's row 7
+   SPACE breaking a program; the Tab5 Keyboard too. So far (the user,
+   2026-11-18): a Bluetooth keyboard and mouse on the Tab5 ran the test,
+   CTRL+SPACE broke it; no findings reported yet. KEYROW's row 7
    (SHIFT, CTRL, ALT in bits 0-2) agrees with the manual's table and
    MAME's on the host.
-2. **Minerva**: its differences (the second screen, the clock's setting;
-   $18021 bit 7 toggling at the baud rate after serial output, docs 3.1).
-3. **More original software**: Abacus, Archive, Easel (Quill works);
+2. **More original software**: Abacus, Archive, Easel (Quill works);
    games from the djw vDrive page, a benchmark (sinclairql.net/djw).
-4. **Timing**: the ZX8301's contention for the internal RAM, measured
+3. **Timing**: the ZX8301's contention for the internal RAM, measured
    against a benchmark's known QL figures.
-5. **The serial ports and the network**: later, if wanted.
+4. **The serial ports and the network**: later, if wanted.
