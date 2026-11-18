@@ -1422,8 +1422,11 @@ it takes the ID's track from the sector register (1: two sides). A write
 sector to sector 255 forced off at once (a delay or a head load, it
 seems). Toolkit 2's commands are linked by `TK2_EXT`; `FLP_USE mdv` makes
 the floppy driver answer to MDV. With a disk in FLP1_ the card boots
-`flp1_boot`, else `mdv1_boot`. QDOS's floppy format: 1440 sectors, the
-map in sector 0 ("QL5A" and the medium name at its start).
+`flp1_boot`, else `mdv1_boot`. QDOS's floppy format: 1440 sectors in
+blocks of 3, the header and map in block 0 ("QL5A", the medium name, the
+geometry and the sector tables; physical sectors 1, 4 and 7 of track 0),
+the logical sectors interleaved and skewed by 5 a cylinder [derived from
+the card's own disks; CLAUDE.md has the whole layout].
 
 ## Sources
 

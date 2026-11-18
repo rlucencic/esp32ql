@@ -91,12 +91,14 @@ core (Musashi) this one shares with the ST, the Macs and the Amiga.
   card boots `flp1_boot`: Quill copied from its cartridge boots from a disk
   in a few seconds. Written disks go back to the card two seconds after
   the last write.
-- `tools/mdvtool.py` puts QL software from a zip (with the QDOS headers QL
-  zips keep) onto a cartridge image, its blocks spaced along the tape as
-  QDOS spaces them; `tools/mdvcheck.py` checks one.
+- **QL software from the web page**: drop QL files, folders or zips on it
+  and they go onto a new cartridge (when they fit) and a new 720 KB floppy
+  disk, made in the browser and uploaded; executables keep their QDOS
+  headers (type and data space), which QL zips carry in their extra
+  fields. `tools/mdvtool.py` does the same for a cartridge on the PC;
+  `tools/mdvcheck.py` checks one.
 
-**Next**, in order: QL zips turned into cartridges and disks on the web
-page, sound.
+**Next**, in order: sound, the keyboard by hand, Minerva's differences.
 
 ## Hardware
 
@@ -129,14 +131,15 @@ cloned next to this repository.
 5. Cartridges: copy `.mdv` images into the SD card's `ql` folder, or upload
    them on the web page; insert them in MDV1_ or MDV2_ from the setup
    screen's Drives page or the web page. A new, blank cartridge needs
-   `FORMAT mdv1_name` first. To put QL software from a zip on one:
-   ```sh
-   tools/mdvtool.py add formatted.mdv software.zip
-   ```
+   `FORMAT mdv1_name` first.
 6. Floppy disks (Floppy: Trump Card): `.img` images in the same folder, in
    FLP1_ or FLP2_; a blank one needs `FORMAT flp1_name`. The card boots
    `flp1_boot` when a disk is in FLP1_. Toolkit 2's commands come after
    `TK2_EXT`; to copy a cartridge to a disk, `WCOPY mdv1_ TO flp1_`.
+7. QL software: drop its zip (or its files) on the web page. It arrives as
+   `<name>.mdv` and `<name>.img` with the files on them, ready to insert.
+   On the PC, `tools/mdvtool.py add formatted.mdv software.zip` puts a
+   zip's files on a cartridge QDOS formatted.
 
 ## Development
 

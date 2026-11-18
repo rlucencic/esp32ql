@@ -69,6 +69,7 @@ Memory 253, Floppy 313 (x 341, 626).
 | `main/keymap.c` | The board's keyboards (HID usages) to the QL's keys, by position |
 | `main/rom_store.c` | The ROMs from their partition slots, or the SD card's `ql/roms` |
 | `main/settings.c` | NVS `ql` |
+| `main/web/qlfiles.js` | The web page's packer (served as /machine.js): dropped QL files and zips onto a new cartridge and floppy disk |
 | `components/ql/` | The machine, platform independent (`include/ql.h`) |
 | `components/ql/mem.c` | The 68008's memory map and bus timing (Musashi's callbacks) |
 | `components/ql/ql.c` | Set up, reset, the frame loop, interrupts, the debugger |
@@ -81,6 +82,7 @@ Memory 253, Floppy 313 (x 341, 626).
 | `components/ql/host/` | Host build: `make -C components/ql/host run`, switches in host_main.c (`QL_IO=1` logs every I/O access) |
 | `tools/mdvcheck.py` | A QLay image's slots, syncs and checksums, sector numbers, the map, the directory |
 | `tools/mdvtool.py` | `ls`, `add`: files onto a QDOS-formatted cartridge image (from zips with their QDOS headers: executables keep their type and data space; blocks spaced along the tape as QDOS spaces them) |
+| `tools/qlfiles_test.js` | qlfiles.js's test: `node tools/qlfiles_test.js [out folder] [x.zip ...]`: zips packed as the page does, both images read back and compared |
 | `docs/ql-hardware.md` | The hardware research (2026-11-18): every register, the IPC, the Microdrive, the boot, with sources |
 | `roms/` | The ROMs (not in git; README.md says where they come from) |
 
@@ -170,6 +172,39 @@ Memory 253, Floppy 313 (x 341, 626).
   "bad name", as the card's manual has boot files start with it);
   `FLP_USE mdv` makes MDV1_ mean FLP1_ (Quill's boot runs `EXEC_W
   MDV1_quill`).
+- **The web page's packer** (`main/web/qlfiles.js`, esp32emu's
+  `registerPacker`): files dropped on the page (loose, in folders, in zips)
+  go onto a new cartridge (`<name>.mdv`, when they fit in its 254 sectors)
+  and a new 720 KB disk (`<name>.img`), both uploaded. A zip entry's QDOS
+  header (type, an executable's data space, its QDOS name) comes from its
+  extra field (ID $FB4A, the last 64 bytes; the page passes each entry's
+  `extra` since 2026-11-18), else a data file's, the path with `/` and `.`
+  as `_`. The cartridge: as a good FORMAT leaves one (a real cartridge's
+  layout, quill-before.mdv from the collection: all 255 sectors, sector 0
+  in the first slot, then 254 down; free blocks $FD with FORMAT's $AA55
+  long block and $5A filler), the map in sector 0, the directory file 0,
+  each file's blocks 13 slots apart as QDOS has them. The disk: the Trump
+  Card's QL5A layout (below), files from block 1 on (the directory first).
+  Checked: `tools/qlfiles_test.js` (made-up files, Quill's zip); in the
+  emulator QDOS and the card's driver take both: DIR ("TEST 244/255
+  sectors", "qui235m 1227/1440 sectors", the same free count WCOPY left),
+  SAVE onto them and LRUN back in a fresh run, Quill from either; the
+  page's own script under node (stub DOM and fetch: the zip through its
+  `unzip()`, two uploads); on the Tab5 the uploaded pair: the boot program
+  from the disk loading Quill from the cartridge; both boards serve
+  /machine.js.
+- **QDOS's floppy format (QL5A)**, read from disks the Trump Card wrote:
+  80 cylinders of 2 x 9 sectors of 512, blocks of 3 sectors. Logical
+  sector l: cylinder l / 18; the table at $28 (18 bytes, bit 7 the side,
+  then the sector - 1: 00 03 06 80 83 86 01 04 07 ...) gives its place in
+  the cylinder, turned by the skew ($26: 5) a cylinder: physical sector
+  `(t + 5 * c) mod 9`. Block 0 (logical 0-2): "QL5A", the name (10), the
+  random number, updates (4), free/good/total sectors, 9, 18, 80, 3, the
+  directory's end (sectors, bytes: its length), the skew, the table and
+  its inverse ($3A), $FF to $5F, then 480 entries of 3 bytes: file (12
+  bits) and block (12), $FDF/$FFF free, $F80 the map. The directory is
+  file 0 (its first 64 bytes unused); files start with their 64-byte
+  header as on a cartridge.
 - **The WD1772** (`flp.c`): runs on its own clock: a sector is found 1 ms
   after the command, then a byte every 32 us (DRQ); a byte the CPU didn't
   take (or give) by the next is lost data; Read Address puts the ID's track
@@ -227,6 +262,14 @@ Memory 253, Floppy 313 (x 341, 626).
   LOAD and EXEC read a whole file in any order, so Quill itself loaded
   fine. QDOS puts each next block 13 slots further on (the collection's
   cartridges): mdvtool does too now (the same COPY in ~70 s).
+- **The page dropped a zip's extra fields**: the QL's zips keep each
+  file's QDOS header there, so an executable from a zip lost its type and
+  data space on the way to the packer (Quill would have become a data
+  file: "9 QL files" without "1 executable" in the page's log). esp32emu's
+  `unzip()` passes `extra` now. And a floppy's sectors aren't contiguous
+  logically: block 0's map is in physical sectors 1, 4 and 7, and files
+  from cylinder 1 on are turned by the skew; reading the image in order
+  gave garbage, locating each block by content found the rule.
 - **Read the ROM before guessing**: the JS ROM's own routines answered
   the IPC protocol, the keyboard codes and the Microdrive registers exactly
   (`QL_IO=1` for who touches which register, `QL_DASM` to read the code,
@@ -257,6 +300,8 @@ Memory 253, Floppy 313 (x 341, 626).
   `QL_FLP_LOG=1` prints each WD1772 command and the IDs a Write Track
   writes. Quill on a disk: `TK2_EXT`, `WCOPY mdv1_ TO flp1_`, `A`; its boot
   needs `FLP_USE mdv` first, or its line 8 as `EXEC_W flp1_quill`.
+- The web page's packer: `node tools/qlfiles_test.js out qui235m.zip`
+  writes `out/qui235m.mdv` and `.img` (to boot with `QL_MDV1`, `QL_FLP1`).
 - Microdrives on the boards: upload the image (`curl -T x.mdv
   http://sinclair-ql.local/disks/`), insert (`curl -X PUT --data "x.mdv"
   .../api/drive/1`), Start, `k 57`; the image back with `curl -o

@@ -362,6 +362,12 @@ static bool console_command(const char *line)
 
 /* ---- The machine ---- */
 
+#if CONFIG_EMU_WEB
+/* web/qlfiles.js: QL files put on a new cartridge and floppy disk in the browser */
+extern const char qlfiles_js_start[] asm("_binary_qlfiles_js_start");
+extern const char qlfiles_js_end[] asm("_binary_qlfiles_js_end");
+#endif
+
 static const emu_machine_t machine = {
     .name = "Sinclair QL",
     .short_name = "QL",
@@ -384,6 +390,10 @@ static const emu_machine_t machine = {
     .choices = choices,
     .choice_count = sizeof(choices) / sizeof(choices[0]),
     .disks = &disks,
+#if CONFIG_EMU_WEB
+    .web_script = qlfiles_js_start,
+    .web_script_end = qlfiles_js_end,
+#endif
     .status = status,
     .console_info = console_info,
     .console_command = console_command,
