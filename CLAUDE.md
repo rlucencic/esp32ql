@@ -282,6 +282,16 @@ Memory 253, Floppy 313 (x 341, 626).
   KB program); the Tab5 on SER1 and the MaTouch on SER2 (2026-11-18): a
   `PRINT #3` line reached a PC client, a program sent from the PC loaded
   (`LOAD ser1z`, `ser2z`) and ran, both at 100%.
+- **The web page's machine card** (`status_rows()` in `main/main.c`,
+  `ql_get_machine()`: plain copies, no side effects): System, ROM (flash
+  or card, the Trump Card's), Memory (QDOS's system variables and RAMTOP),
+  Free RAM (SV.BASIC - SV.FREE less 1 KB, as Toolkit 2's FREE_MEM: 599040
+  both on the host), Screen and Palette (mode 4 or 8, screen 0 or 1),
+  Sound (the beeper's pitch now, from beep.c's half period), Interrupts
+  ($18021's enables), Keyboard (CAPS LOCK from SV.CAPS, $28088),
+  Microdrives, Floppy, Serial (clients, QDOS reading, $18002's target and
+  baud), Clock (DATE$'s form). At most ~1.55 KB of rows (esp32emu's status
+  reply has 4 KB). The host prints the same as `machine:` at the end.
 - **The web page's packer** (`main/web/qlfiles.js`, esp32emu's
   `registerPacker`): files dropped on the page (loose, in folders, in zips)
   go onto a new cartridge (`<name>.mdv`, when they fit in its 254 sectors)

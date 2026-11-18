@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <time.h>
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "esp_heap_caps.h"
@@ -32,6 +33,7 @@ static const char *const floppy_names[] = { "None", "Trump Card", "" };
 static ql_config_t s_cfg;
 static uint8_t *s_rom, *s_trump;
 static bool s_started;
+static int s_rom_id;                    /* the ROM the machine started with */
 
 /* ---- Memory ----
  *
@@ -69,6 +71,7 @@ static bool start(void)
         return false;
     }
     s_cfg.rom = s_rom;
+    s_rom_id = settings.rom;
     s_cfg.ram_size = settings.memory ? QL_RAM_640K : QL_RAM_128K;
     s_cfg.trump_rom = NULL;
     if (settings.floppy) {
@@ -287,23 +290,127 @@ static void every_second(void)
 
 /* ---- Status ---- */
 
+/* A colour swatch (#rgb) */
+static int swatch(char *p, size_t size, unsigned rgb)
+{
+    return snprintf(p, size, "<b style=\"background:#%03x\">&nbsp;&nbsp;&nbsp;</b>", rgb & 0xFFF);
+}
+
+static void status_rows(emu_json_t *j, const ql_status_t *s)
+{
+    char text[320];
+    ql_machine_t m;
+    ql_get_machine(&m);
+    bool big = s_cfg.ram_size > QL_RAM_128K;
+    snprintf(text, sizeof(text), "Sinclair QL: a 68008 at 7.5 MHz, %u KB RAM, the ZX8301 and ZX8302, the IPC "
+             "(an 8049)", (unsigned)(s_cfg.ram_size / 1024));
+    emu_json_row(j, "System", text);
+
+    snprintf(text, sizeof(text), "%s, 48 KB at $00000, from %s%s", rom_full[s_rom_id],
+             rom_store_from_sd(s_rom_id) ? "the SD card" : "the flash", s_cfg.trump_rom ?
+             "; the Trump Card's 32 KB at $10000 (its FLP_ driver, RAM disks, Toolkit 2)" : "");
+    emu_json_row(j, "ROM", text);
+
+    int n = snprintf(text, sizeof(text), big ? "128 KB at $20000 (slowed by the screen's reads), 512 KB at "
+                     "$40000-$BFFFF" : "128 KB at $20000-$3FFFF (slowed by the screen's reads)");
+    if (m.qdos) {
+        snprintf(text + n, sizeof(text) - n, "; QDOS's variables at $%05lX, RAMTOP $%05lX", (unsigned long)m.sysvars,
+                 (unsigned long)m.ramtop);
+    }
+    emu_json_row(j, "Memory", text);
+    /* QDOS's free area, as Toolkit 2's FREE_MEM gives it */
+    if (m.qdos) {
+        uint32_t total = s_cfg.ram_size;
+        snprintf(text, sizeof(text), "%lu KB of %lu KB", (unsigned long)(m.free_bytes / 1024),
+                 (unsigned long)(total / 1024));
+        emu_json_row_bar(j, "Free RAM", text, 100 - (int)((uint64_t)m.free_bytes * 100 / total));
+    }
+
+    bool mode8 = m.mode & 0x08;
+    snprintf(text, sizeof(text), "Mode %d: %s; screen %d at $%05X%s", mode8 ? 8 : 4,
+             mode8 ? "256 × 256, 8 colours, flashing" : "512 × 256, 4 colours", (m.mode & 0x80) ? 1 : 0,
+             (m.mode & 0x80) ? 0x28000 : 0x20000, (m.mode & 0x02) ? ", blanked" : "");
+    emu_json_row(j, "Screen", text);
+    /* mode 4: black, red, green, white; mode 8: G R B, black to white */
+    static const uint16_t mode4[4] = { 0x000, 0xF00, 0x0F0, 0xFFF };
+    static const uint16_t mode8_rgb[8] = { 0x000, 0x00F, 0xF00, 0xF0F, 0x0F0, 0x0FF, 0xFF0, 0xFFF };
+    static char swatches[512];          /* (the web server's task only) */
+    n = snprintf(swatches, sizeof(swatches), "%d colours: ", mode8 ? 8 : 4);
+    for (int i = 0; i < (mode8 ? 8 : 4) && (size_t)n < sizeof(swatches); i++) {
+        n += swatch(swatches + n, sizeof(swatches) - n, mode8 ? mode8_rgb[i] : mode4[i]);
+    }
+    emu_json_row(j, "Palette", swatches);
+
+    /* The IPC's beeper: BEEP's pitch and duration (72 us units, 0 until stopped) */
+    if (m.beep_on) {
+        n = snprintf(text, sizeof(text), "The IPC's beeper: about %u Hz (BEEP's pitch %u)", m.beep_hz,
+                     m.beep_pitch1);
+        if (m.beep_steps) {
+            n += snprintf(text + n, sizeof(text) - n, ", stepping between %u and %u", m.beep_pitch1, m.beep_pitch2);
+        }
+        if (m.beep_duration) {
+            unsigned ms = (unsigned)((uint32_t)m.beep_duration * 72 / 1000);
+            snprintf(text + n, sizeof(text) - n, ", for %u.%02u s", ms / 1000, ms % 1000 / 10);
+        } else {
+            snprintf(text + n, sizeof(text) - n, ", until stopped");
+        }
+    } else {
+        snprintf(text, sizeof(text), "The IPC's beeper: quiet");
+    }
+    emu_json_row(j, "Sound", text);
+
+    snprintf(text, sizeof(text), "Level 2 (the ZX8302's): the frame (50 Hz) and external always; gap %s, "
+             "interface %s, transmit %s", (m.int_mask & 0x20) ? "on" : "off", (m.int_mask & 0x40) ? "on" : "off",
+             (m.int_mask & 0x80) ? "on" : "off");
+    emu_json_row(j, "Interrupts", text);
+
+    snprintf(text, sizeof(text), "By position (US): ` £, Backspace CTRL+LEFT, Delete CTRL+RIGHT, F6-F10 "
+             "SHIFT+F1-F5, Pause CTRL+SPACE (break); CAPS LOCK %s", m.caps_lock ? "on" : "off");
+    emu_json_row(j, "Keyboard", text);
+
+    snprintf(text, sizeof(text), "%s; QLay cartridges (.mdv), 255 sectors, 8.1 s a turn",
+             s->mdv_motor ? (s->mdv_motor == 1 ? "MDV1_ turning" : "MDV2_ turning") : "Both still");
+    emu_json_row(j, "Microdrives", text);
+    if (s_cfg.trump_rom) {
+        snprintf(text, sizeof(text), "Miracle Trump Card: a WD1772, FLP1_ and FLP2_ (720 KB .img, also 360 and 800 "
+                 "KB)%s; Toolkit 2 after TK2_EXT", s->flp_light ? (s->flp_light == 1 ? ", FLP1_ busy" :
+                 ", FLP2_ busy") : "");
+        emu_json_row(j, "Floppy", text);
+    } else {
+        emu_json_row(j, "Floppy", "None (the setup screen's Floppy row: Trump Card)");
+    }
+
+    /* The ZX8302's transmitter: SER1, SER2, the Microdrives or the network */
+    static const unsigned baud[8] = { 19200, 9600, 4800, 2400, 1200, 600, 300, 75 };
+    static const char *const sends[4] = { "SER1", "SER2", "the Microdrives", "the network" };
+    static const char *const states[4] = { "", " (QDOS reading)", " (connected)", " (connected, QDOS reading)" };
+    n = snprintf(text, sizeof(text), "SER1 on TCP port %d%s, SER2 on %d%s; sending to %s", serial_tcp_port(0),
+                 states[serial_connected(0) * 2 + m.ser_open[0]], serial_tcp_port(1),
+                 states[serial_connected(1) * 2 + m.ser_open[1]], sends[(m.tmode >> 3) & 3]);
+    if (!(m.tmode & 0x10)) {
+        snprintf(text + n, sizeof(text) - n, " at %u baud", baud[m.tmode & 7]);
+    }
+    emu_json_row(j, "Serial", text);
+
+    /* The QL's clock: the board's plus the offset SDATE/ADATE made (DATE$'s form) */
+    time_t when = time(NULL) + ql_rtc_offset();
+    struct tm tm;
+    gmtime_r(&when, &tm);
+    n = (int)strftime(text, sizeof(text), "%Y %b %d %H:%M:%S", &tm);
+    if (ql_rtc_offset()) {
+        snprintf(text + n, sizeof(text) - n, " (the board's time %+ld s, set with SDATE)", (long)ql_rtc_offset());
+    } else {
+        snprintf(text + n, sizeof(text) - n, " (the board's time)");
+    }
+    emu_json_row(j, "Clock", text);
+}
+
 static void status(emu_json_t *j, int section)
 {
-    char text[160];
     ql_status_t s;
     ql_get_status(&s);
     if (section == EMU_STATUS_ROWS) {
-        snprintf(text, sizeof(text), "Sinclair QL, %s", memory_names[settings.memory]);
-        emu_json_row(j, "System", text);
-        emu_json_row(j, "ROM", rom_full[settings.rom]);
-        emu_json_row(j, "Floppy", settings.floppy ? "Miracle Trump Card (FLP1_, FLP2_; Toolkit 2: TK2_EXT)" :
-                     "None");
-        snprintf(text, sizeof(text), "SER1 on TCP port %d%s, SER2 on %d%s", serial_tcp_port(0),
-                 serial_connected(0) ? " (connected)" : "", serial_tcp_port(1), serial_connected(1) ? " (connected)" : "");
-        emu_json_row(j, "Serial", text);
-        snprintf(text, sizeof(text), "%s, screen at $%05X%s", (s.mode & 0x08) ? "256 × 256, 8 colours" :
-                 "512 × 256, 4 colours", (s.mode & 0x80) ? 0x28000 : 0x20000, (s.mode & 0x02) ? ", blanked" : "");
-        emu_json_row(j, "Screen", text);
+        status_rows(j, &s);
         return;
     }
     for (int d = 0; d < DRIVES; d++) {

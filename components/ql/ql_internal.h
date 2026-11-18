@@ -133,6 +133,9 @@ void ql_beep_stop(void);                        /* command 11 */
 bool ql_beep_on(void);                          /* the status's bit 1 */
 int16_t ql_beep_sample(uint64_t end);           /* a sample up to that clock */
 
+void ql_beep_state(ql_machine_t *m);           /* for ql_get_machine() */
+void ql_io_state(uint8_t *tmode, uint8_t *int_mask);
+
 /* Sound (sound.c) */
 void ql_sound_line(void);           /* two samples, at each line's end */
 

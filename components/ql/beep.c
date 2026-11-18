@@ -310,6 +310,21 @@ void ql_beep_stop(void)
     b.on = false;
 }
 
+/* For the status page: the sound as BEEP gave it, and its pitch now (a
+ * half period: 32 cycles a timer tick plus the routine's own, 307 with a
+ * duration, 252 without; the 8049 makes 733333 cycles a second)
+ */
+void ql_beep_state(ql_machine_t *m)
+{
+    m->beep_on = b.on;
+    m->beep_pitch1 = (uint8_t)(b.p1 - 1);
+    m->beep_pitch2 = (uint8_t)(b.p2 - 1);
+    m->beep_duration = b.duration;
+    m->beep_steps = (b.stepwrap & 0xF0) && b.interval;
+    uint32_t ticks = b.half ? b.half : 256;
+    m->beep_hz = (uint16_t)(733333u / (2 * (32 * ticks + (b.duration ? 307 : 252))));
+}
+
 /* IPCSTAT bit 1, as command 1 reports it */
 bool ql_beep_on(void)
 {

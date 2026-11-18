@@ -375,6 +375,13 @@ int main(int argc, char **argv)
     if (ql_rtc_offset()) {
         printf("clock offset now %ld s\n", (long)ql_rtc_offset());
     }
+    ql_machine_t m;
+    ql_get_machine(&m);
+    printf("machine: %s, $18002 %02x, interrupts %02x, beep %s %u Hz (pitch %u to %u, duration %u%s), SER %d %d; "
+           "QDOS %s: variables $%05lx, RAMTOP $%05lx, %lu bytes free, caps %s\n", m.supervisor ? "supervisor" : "user",
+           m.tmode, m.int_mask, m.beep_on ? "on" : "off", m.beep_hz, m.beep_pitch1, m.beep_pitch2, m.beep_duration,
+           m.beep_steps ? ", steps" : "", m.ser_open[0], m.ser_open[1], m.qdos ? "found" : "not found",
+           (unsigned long)m.sysvars, (unsigned long)m.ramtop, (unsigned long)m.free_bytes, m.caps_lock ? "on" : "off");
     if (cfg.trump_rom) {
         printf("floppies: %u/%u sectors read, %u/%u written (tracks formatted count too)\n", s.flp_reads[0],
                s.flp_reads[1], s.flp_writes[0], s.flp_writes[1]);

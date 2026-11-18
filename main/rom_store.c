@@ -94,13 +94,22 @@ static bool from_sd(rom_id_t id, uint8_t *buf)
     return true;
 }
 
+static bool s_from_sd[ROM_COUNT];
+
 bool rom_store_load(rom_id_t id, uint8_t *buf)
 {
     if (id >= ROM_COUNT) {
         return false;
     }
+    s_from_sd[id] = false;
     if (from_sd(id, buf) && plausible(id, buf)) {
+        s_from_sd[id] = true;
         return true;                    /* the card's overrides the built-in one */
     }
     return from_partition(id, buf) && plausible(id, buf);
+}
+
+bool rom_store_from_sd(rom_id_t id)
+{
+    return id < ROM_COUNT && s_from_sd[id];
 }

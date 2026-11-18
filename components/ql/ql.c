@@ -204,6 +204,46 @@ void ql_run_frame(void)
     ql.frames++;
 }
 
+/* A long from the RAM ($20000 on), as the 68008 sees it */
+static uint32_t ram_long(uint32_t a)
+{
+    const uint8_t *p = ql.ram + (a - QL_RAM_BASE);
+    return (uint32_t)p[0] << 24 | (uint32_t)p[1] << 16 | (uint32_t)p[2] << 8 | p[3];
+}
+
+void ql_get_machine(ql_machine_t *m)
+{
+    memset(m, 0, sizeof(*m));
+    if (ql.ram == NULL) {
+        return;
+    }
+    m->mode = ql.mode;
+    ql_io_state(&m->tmode, &m->int_mask);
+    m->supervisor = (m68k_get_reg(NULL, M68K_REG_SR) & 0x2000) != 0;
+    ql_beep_state(m);
+    for (int p = 0; p < QL_SER_PORTS; p++) {
+        m->ser_open[p] = ql_ser_is_open(p);
+    }
+    /* QDOS's system variables: SV.IDENT $D254 at their start */
+    static const uint32_t places[2] = { 0x28000, 0x30000 };
+    for (int i = 0; i < 2; i++) {
+        uint32_t sv = places[i];
+        if (sv + 0x90 > QL_RAM_BASE + ql.ram_size || (ram_long(sv) >> 16) != 0xD254) {
+            continue;
+        }
+        uint32_t free_base = ram_long(sv + 0x0C), basic = ram_long(sv + 0x10), ramtop = ram_long(sv + 0x20);
+        if (free_base > basic || ramtop > QL_RAM_BASE + ql.ram_size) {
+            continue;
+        }
+        m->qdos = true;
+        m->sysvars = sv;
+        m->ramtop = ramtop;
+        m->free_bytes = basic - free_base > 1024 ? basic - free_base - 1024 : 0;   /* as FREE_MEM */
+        m->caps_lock = ql.ram[sv + 0x88 - QL_RAM_BASE] != 0 || ql.ram[sv + 0x89 - QL_RAM_BASE] != 0;
+        break;
+    }
+}
+
 void ql_get_status(ql_status_t *status)
 {
     memset(status, 0, sizeof(*status));

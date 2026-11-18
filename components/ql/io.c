@@ -76,6 +76,12 @@ static uint32_t rtc(void)
     return now_seconds() + RTC_1961 + s_rtc_offset;
 }
 
+void ql_io_state(uint8_t *tmode, uint8_t *int_mask)
+{
+    *tmode = s_tmode;
+    *int_mask = s_int_mask;
+}
+
 int32_t ql_rtc_offset(void)
 {
     return s_rtc_offset;

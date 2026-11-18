@@ -139,3 +139,27 @@ typedef struct {
 } ql_status_t;
 
 void ql_get_status(ql_status_t *status);
+
+/* The chips' registers and QDOS's variables for a status page: plain
+ * copies (any task, no side effects; races with the emulation harmless)
+ */
+typedef struct {
+    uint8_t mode;               /* the ZX8301's MODE ($18063): bit 3 mode 8, bit 7 the second screen, bit 1 blank */
+    uint8_t tmode;              /* the ZX8302's $18002: bits 0-2 the baud rate (19200 >> n, 7: 75), bits 3-4
+                                   SER1, SER2, Microdrive, network */
+    uint8_t int_mask;           /* $18021's enables: bit 5 gap, 6 interface, 7 transmit */
+    bool supervisor;            /* the 68008's SR bit 13 */
+    /* The IPC's beeper */
+    bool beep_on;
+    uint16_t beep_hz;           /* now (a step moves the pitch) */
+    uint8_t beep_pitch1, beep_pitch2;   /* as BEEP takes them */
+    uint16_t beep_duration;     /* BEEP's, in 72 us units (0: until stopped) */
+    bool beep_steps;            /* the pitch steps between pitch 1 and 2 */
+    bool ser_open[QL_SER_PORTS];        /* QDOS receiving on SERn */
+    /* QDOS's system variables ($28000, Minerva's second screen $30000): found or not */
+    bool qdos;
+    uint32_t sysvars, ramtop, free_bytes;  /* SV.RAMT; the free area (SV.BASIC - SV.FREE) less 1 KB, as
+                                              Toolkit 2's FREE_MEM gives it */
+    bool caps_lock;             /* SV.CAPS */
+} ql_machine_t;
+void ql_get_machine(ql_machine_t *m);
