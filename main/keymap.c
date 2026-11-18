@@ -10,10 +10,25 @@
  * SHIFT, where the QL has them).
  */
 #include <string.h>
+#include "esp_log.h"
 #include "ql.h"
 #include "keymap.h"
 
 #define NONE    0xFF
+
+bool keymap_log;
+
+/* The QL's keys by code, for the log (tools/keytest.bas has the same) */
+static const char *const key_names[QL_KEYS] = {
+    "SHIFT", "CTRL", "ALT", "X", "V", "/", "N", ",",
+    "8", "2", "6", "Q", "E", "0", "T", "U",
+    "9", "W", "I", "TAB", "R", "-", "Y", "O",
+    "L", "3", "H", "1", "A", "P", "D", "J",
+    "[", "CAPS", "K", "S", "F", "=", "G", ";",
+    "]", "Z", ".", "C", "B", "POUND", "M", "'",
+    "ENTER", "LEFT", "UP", "ESC", "RIGHT", "\\", "SPACE", "DOWN",
+    "F4", "F1", "5", "F2", "F3", "F5", "4", "7",
+};
 
 typedef struct {
     uint8_t key, with;                  /* with: NONE or a modifier held with it */
@@ -87,6 +102,20 @@ static void key_ref(uint8_t key, bool down)
     }
 }
 
+static void log_key(uint8_t usage, bool pressed, keymap_t m)
+{
+    if (!keymap_log) {
+        return;
+    }
+    if (m.key == NONE || (m.key == 0 && m.with == 0)) {
+        ESP_LOGI("keys", "$%02X %s: not a QL key", usage, pressed ? "down" : "up");
+    } else if (m.with != NONE) {
+        ESP_LOGI("keys", "$%02X %s: %s+%s", usage, pressed ? "down" : "up", key_names[m.with], key_names[m.key]);
+    } else {
+        ESP_LOGI("keys", "$%02X %s: %s", usage, pressed ? "down" : "up", key_names[m.key]);
+    }
+}
+
 void keymap_hid_key(uint8_t usage, bool pressed)
 {
     if (usage >= 0xE0 && usage <= 0xE7) {
@@ -94,14 +123,17 @@ void keymap_hid_key(uint8_t usage, bool pressed)
         static const uint8_t keys[8] = {
             QL_KEY_CTRL, QL_KEY_SHIFT, QL_KEY_ALT, NONE, QL_KEY_CTRL, QL_KEY_SHIFT, QL_KEY_ALT, NONE,
         };
+        log_key(usage, pressed, (keymap_t){ keys[usage - 0xE0], NONE });
         key_ref(keys[usage - 0xE0], pressed);
         return;
     }
     if (pressed) {
         if (usage >= sizeof(usage_map) / sizeof(usage_map[0])) {
+            log_key(usage, pressed, (keymap_t){ 0, 0 });
             return;
         }
         keymap_t m = usage_map[usage];
+        log_key(usage, pressed, m);
         if (m.key == 0 && m.with == 0) {
             return;                     /* not a QL key */
         }
@@ -110,6 +142,7 @@ void keymap_hid_key(uint8_t usage, bool pressed)
         key_ref(m.key, true);
     } else {
         keymap_t m = s_held[usage];
+        log_key(usage, pressed, m);
         if (m.key == 0 && m.with == 0) {
             return;
         }

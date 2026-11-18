@@ -83,7 +83,9 @@ core (Musashi) this one shares with the ST, the Macs and the Amiga.
 - The keyboard: Bluetooth and USB keyboards (the Tab5 Keyboard too) by
   position, Backspace and Delete as the QL's CTRL + ← and CTRL + →, F6-F10
   as SHIFT + F1-F5, Pause as CTRL + SPACE (break), the keypad's digits and
-  signs. `tools/keytest.bas` shows each key's code and the keys held.
+  signs. `tools/keytest.bas` shows each key's code and the keys held;
+  checked by hand with a Bluetooth keyboard (every key) and the Tab5
+  Keyboard.
 - The JS ROM (QDOS 1.10) and Minerva 1.98 boot to SuperBASIC on both boards
   at full speed (the Tab5's emulation core ~22% busy, the MaTouch's ~64%);
   Minerva's start options too (F3/F4 two screens, SHIFT for 128 KB). The
@@ -121,8 +123,7 @@ core (Musashi) this one shares with the ST, the Macs and the Amiga.
   the IPC as on a QL: `LOAD ser1z` loads a SuperBASIC program sent from
   the PC.
 
-**Next**, in order: the keyboard by hand (Bluetooth and USB), the network
-if wanted.
+**Next**: the QL network, if wanted.
 
 ## Hardware
 

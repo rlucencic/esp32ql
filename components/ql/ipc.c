@@ -77,12 +77,16 @@ static uint8_t modifiers(void)
     return ((row >> QL_KEY_ALT) & 1) | (((row >> QL_KEY_CTRL) & 1) << 1) | (((row >> QL_KEY_SHIFT) & 1) << 2);
 }
 
+bool ql_debug_keys;                     /* log the keys QDOS gets, and those lost */
+
 static void push_key(uint8_t mods, uint8_t code)
 {
     if (s_fifo_n < FIFO) {
         s_fifo[s_fifo_n].mods = mods;
         s_fifo[s_fifo_n].code = code;
         s_fifo_n++;
+    } else if (ql_debug_keys) {
+        QL_LOGI("IPC: key %d lost (%d waiting)", code, s_fifo_n);
     }
 }
 
@@ -117,6 +121,11 @@ static void execute(void)
         for (int i = 0; i < n; i++) {
             reply_bits(s_fifo[i].mods, 4);
             reply_bits(s_fifo[i].code, 8);
+            if (ql_debug_keys) {
+                uint8_t m = s_fifo[i].mods;
+                QL_LOGI("IPC: key %d%s%s%s to QDOS%s", s_fifo[i].code, m & 4 ? " SHIFT" : "", m & 2 ? " CTRL" : "",
+                        m & 1 ? " ALT" : "", s_held > 0 && i == n - 1 ? " (a key held)" : "");
+            }
         }
         memmove(s_fifo, s_fifo + n, (s_fifo_n - n) * sizeof(s_fifo[0]));
         s_fifo_n -= n;

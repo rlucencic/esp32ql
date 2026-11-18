@@ -56,7 +56,9 @@ Console commands (`main/main.c`): `k <n>` tap key n (`ql.h`'s `QL_KEY_*`:
 57 F1, 59 F2, 48 ENTER, 54 SPACE), `K <n> 0|1`, `T <text>` (`\n` ENTER; a
 key every 3 frames), `R <rom> [memory] [floppy]` restart with ROM 0 JS /
 1 Minerva, memory 0 128 KB / 1 640 KB, floppy 0 none / 1 the Trump Card
-(only once the machine runs: on the setup screen tap the rows). From the
+(only once the machine runs: on the setup screen tap the rows), `H 1|0`
+the key log (each keyboard key: its HID usage, the QL keys it becomes,
+and each key the IPC hands QDOS with its modifiers, or "lost"). From the
 setup screen to SuperBASIC: Start, `k 57` (F1), wait ~10 s (the empty
 `mdv1_boot` attempt), `T PRINT 2+2\n`. The setup rows (Tab5): ROM y 227,
 Memory 298, Floppy 369 (two buttons at x 426, 781); MaTouch: ROM 193,
@@ -87,6 +89,7 @@ Memory 253, Floppy 313 (x 341, 626).
 | `tools/mdvcheck.py` | A QLay image's slots, syncs and checksums, sector numbers, the map, the directory |
 | `tools/mdvtool.py` | `ls`, `add`: files onto a QDOS-formatted cartridge image (from zips with their QDOS headers: executables keep their type and data space; blocks spaced along the tape as QDOS spaces them) |
 | `tools/keytest.bas` | A keyboard test for the QL (SuperBASIC): 1 each key's code (INKEY$), 2 the keys held by name (KEYROW); saved as `boot` it starts itself |
+| `tools/qlshot.py` | The screen of a board over WiFi (the debugger's memory reads), as a PNG in mode 4 or 8 |
 | `tools/ipc_beep.py` | beep.c against the IPC's own sound routine, run by a small 8049 interpreter from Venema's listing: `tools/ipc_beep.py ipc8049.txt [cases] [seed]` |
 | `tools/qlfiles_test.js` | qlfiles.js's test: `node tools/qlfiles_test.js [out folder] [x.zip ...]`: zips packed as the page does, both images read back and compared |
 | `docs/ql-hardware.md` | The hardware research (2026-11-18): every register, the IPC, the Microdrive, the boot, with sources |
@@ -165,7 +168,25 @@ Memory 253, Floppy 313 (x 341, 626).
   its digits and signs (* and + with SHIFT); a key that adds a modifier
   presses it first (the IPC reports a key with the modifiers held as it
   goes down) and the modifiers are counted, so a real SHIFT held across
-  F6 stays down.
+  F6 stays down. By position: on a keyboard with another layout the
+  keys are where a US one has them (the key printed `-` on a German or
+  Croatian one is the QL's `/`). Checked by hand (2026-11-18, the Tab5, a
+  Logitech MX Keys S over Bluetooth, with `tools/keytest.bas` and the
+  console's `H 1`): letters, digits, the punctuation keys, the key left
+  of 1 as £, Tab, Esc, Enter, Space, F1-F5 and F6-F10 (SHIFT+F1-F5),
+  the cursor keys (208 192 216 200), Backspace and Delete (CTRL+LEFT,
+  CTRL+RIGHT: 202), Caps Lock (a then gave A), the keypad's 7 and +,
+  SHIFT/CTRL/ALT with a key, CTRL+SPACE breaking the test, autorepeat
+  (12 a's in 1.7 s); every key pressed reached QDOS, fast typing with
+  keys overlapping too. The MX Keys' top row sends its own functions
+  (Windows+H, ...) unless Fn+Esc locks it to F1-F12. The Tab5 Keyboard
+  (the user: "working"; its codes on the screen read through the
+  debugger, its USB port being unplugged): Backspace 194, the cursor
+  keys, `\`, letters, SHIFT. It is only found at start-up (esp32emu).
+  Not checked by hand (the user, 2026-11-18: left for now, to be reported
+  if something fails): a USB keyboard, a Bluetooth keyboard on the
+  MaTouch, the test's option 2 on a board (KEYROW's row 7 agrees with
+  the manual's table and MAME's on the host).
 - **Microdrives** (`mdv.c`; docs/ql-hardware.md 6): cartridges are QLay
   images (174930 bytes, 255 slots of 686), kept in memory, written back
   to the card 2 s after the last write (`every_second()`). Each drive's
@@ -419,7 +440,8 @@ Memory 253, Floppy 313 (x 341, 626).
 - Boards (2026-11-18): the JS ROM to its F1/F2 screen at 100% on both (Tab5
   core 1 ~21%, MaTouch ~64%); F1 and `PRINT 2+2` (console `k 57`, `T`) on
   both: 4; SuperBASIC's circles in mode 8 on the Tab5 (the README's
-  picture). Not yet by hand with a Bluetooth or USB keyboard.
+  picture). A Bluetooth keyboard by hand on the Tab5 (The machine, the
+  keyboard); not yet a USB keyboard.
 - Microdrives on the host: `head -c 174930 /dev/zero > blank.mdv`,
   `QL_MDV1=blank.mdv QL_KEYS="250:57:1;255:57:0" QL_TYPE='600:FORMAT
   mdv1_test\n'` (3000 frames), then `tools/mdvcheck.py blank.mdv`. Quill:
@@ -466,6 +488,11 @@ Memory 253, Floppy 313 (x 341, 626).
   Card) or MDV1_ it starts after F1. Host: option 2 with SHIFT, CTRL, A
   held (`QL_KEYS`) shows "SHIFT CTRL A"; option 1 typing a, A, !, LEFT,
   SHIFT+F1, ALT+A gives 97, 65, 33, 192, 234, 255 97 (docs 4.9).
+  `QL_KEY_LOG=1` prints each key the IPC hands QDOS (the board: `H 1`).
+  On a board by hand: the console's `H 1` and its log running while the
+  keys are pressed (`emu_console.py PORT log 900 > file`), then `H 0`.
+  Without the USB port (unplugged): `tools/qlshot.py <board> out.png [8]`
+  reads the screen over WiFi through the debugger (TCP 6502) and draws it.
 - Minerva on the host: `QL_RAM_KB=640 QL_KEYS="900:57:1;905:57:0"` (F1
   after its RAM test; 60 for F3, dual screen; 0 held with it for 128 KB
   only); `PRINT PEEK_L(163872)` is RAMTOP ($28020) in single-screen mode,

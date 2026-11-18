@@ -336,10 +336,17 @@ static void console_info(char *buf, size_t len)
  *   T <text>           type text (\n is ENTER)
  *   R <rom> [memory] [floppy]   restart with ROM 0 JS, 1 Minerva; memory 0
  *                      128 KB, 1 640 KB; floppy 0 none, 1 the Trump Card
+ *   H <0|1>            log the keyboards' keys (HID usage, the QL's keys)
+ *                      and the keys the IPC hands QDOS
  */
 static bool console_command(const char *line)
 {
     switch (line[0]) {
+    case 'H': {
+        extern bool ql_debug_keys;
+        keymap_log = ql_debug_keys = strtoul(line + 1, NULL, 10) != 0;
+        return true;
+    }
     case 'k': {
         unsigned key = strtoul(line + 1, NULL, 10);
         ql_key(key, true);
