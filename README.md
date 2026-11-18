@@ -36,9 +36,20 @@ cartridges on the microSD card.
 
 It's the sibling of [esp32ste](https://github.com/rlucencic/esp32ste) (Atari
 STE), [esp32mac](https://github.com/rlucencic/esp32mac) (Macintosh Plus, SE,
-Classic), [esp32zx](https://github.com/rlucencic/esp32zx) (ZX Spectrum 128K,
-+2, +3), [esp32ami](https://github.com/rlucencic/esp32ami) (Amiga) and the
-others; all are built on the shared runtime
+Classic), [esp32mac2](https://github.com/rlucencic/esp32mac2) (Macintosh LC
+and II, Tab5 only), [esp32mac3](https://github.com/rlucencic/esp32mac3)
+(Macintosh LC II and LC III, Tab5 only),
+[esp32cpc](https://github.com/rlucencic/esp32cpc) (Amstrad CPC),
+[esp32zx](https://github.com/rlucencic/esp32zx) (ZX Spectrum 128K, +2, +3),
+[esp32cbm](https://github.com/rlucencic/esp32cbm) (Commodore 64 and 128),
+[esp32xl](https://github.com/rlucencic/esp32xl) (Atari 800XL and 130XE),
+[esp32msx](https://github.com/rlucencic/esp32msx) (MSX1 and MSX2),
+[esp32gs](https://github.com/rlucencic/esp32gs) (Apple IIGS),
+[esp32coco](https://github.com/rlucencic/esp32coco) (Tandy Color Computer 2
+and 3), [esp32arc](https://github.com/rlucencic/esp32arc) (Acorn Archimedes,
+Tab5 only), [esp32pc](https://github.com/rlucencic/esp32pc) (IBM PC/XT and
+PC/AT) and [esp32ami](https://github.com/rlucencic/esp32ami) (Amiga 500,
+2000, 600 and 1200, Tab5 only); all are built on the shared runtime
 [esp32emu](https://github.com/rlucencic/esp32emu), which also holds the 68000
 core (Musashi) this one shares with the ST, the Macs and the Amiga.
 
