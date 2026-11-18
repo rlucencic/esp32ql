@@ -17,6 +17,9 @@
  *   QL_KEYS=<frame>:<key>:<0|1>[;...]  matrix keys down or up
  *   QL_MDV1, QL_MDV2       cartridge images (written: use copies)
  *   QL_WAV=<file>          the sound
+ *   QL_DUMP=<addr>:<len>[;...]  memory in hex at the end (QDOS's system
+ *                          variables are at $28000; $28068 the job table)
+ *   QL_DASM=<addr>:<count> disassemble the ROM there and exit
  *   QL_DEBUG=<port>        the debugger (real time)
  */
 #include <stdio.h>
@@ -169,6 +172,15 @@ int main(int argc, char **argv)
     printf("ROM %s: %zu bytes\n", argv[1], n);
     extern bool ql_debug_io;
     ql_debug_io = getenv("QL_IO") != NULL;
+    /* QL_DASM=<address>:<count>: disassemble the ROM there and exit */
+    if (getenv("QL_DASM")) {
+        static uint8_t ram0[QL_RAM_128K];
+        ql_config_t c0 = { .rom = rom, .ram = ram0, .ram_size = QL_RAM_128K };
+        ql_init(&c0);
+        const char *e = getenv("QL_DASM");
+        disassemble(strtoul(e, NULL, 16), strchr(e, ':') ? atoi(strchr(e, ':') + 1) : 40);
+        return 0;
+    }
 
     uint32_t frames = argc > 2 ? strtoul(argv[2], NULL, 10) : 500;
     const char *out = argc > 3 ? argv[3] : "screen.ppm";
@@ -258,6 +270,19 @@ int main(int argc, char **argv)
     ql_status_t s;
     ql_get_status(&s);
     printf("after %u frames: PC $%05lx SR %04x mode %02x\n", s_frame, (unsigned long)s.pc, s.sr, s.mode);
+    /* QL_DUMP=<address>:<length>[;...]: memory at the end, in hex */
+    for (const char *e = getenv("QL_DUMP"); e && *e;) {
+        uint32_t a = strtoul(e, NULL, 16), len = strchr(e, ':') ? strtoul(strchr(e, ':') + 1, NULL, 0) : 64;
+        for (uint32_t i = 0; i < len; i += 16) {
+            printf("  $%05x ", a + i);
+            for (uint32_t k = 0; k < 16 && i + k < len; k++) {
+                printf(" %02x", m68k_read_disassembler_8(a + i + k));
+            }
+            printf("\n");
+        }
+        e = strchr(e, ';');
+        e = e ? e + 1 : NULL;
+    }
     const char *ring_env = getenv("QL_RING");
     if (ring_env) {
         int count = atoi(ring_env);

@@ -48,7 +48,24 @@ bool ql_halted(void);
 uint32_t ql_screen_signature(void);
 void ql_render_line_rgb565(int y, uint16_t *dst);
 
-/* ---- Keyboard: the QL's keys by matrix position (row * 8 + column) ---- */
+/* ---- Keyboard: the QL's keys by matrix position (row * 8 + column) ----
+ *
+ * The codes the IPC reports (the ROM's key translation table: JS $B458).
+ * KEYROW(r) reads row 7 - r. SHIFT, CTRL and ALT are reported as modifiers.
+ */
+enum {
+    QL_KEY_SHIFT, QL_KEY_CTRL, QL_KEY_ALT, QL_KEY_X, QL_KEY_V, QL_KEY_SLASH, QL_KEY_N, QL_KEY_COMMA,
+    QL_KEY_8, QL_KEY_2, QL_KEY_6, QL_KEY_Q, QL_KEY_E, QL_KEY_0, QL_KEY_T, QL_KEY_U,
+    QL_KEY_9, QL_KEY_W, QL_KEY_I, QL_KEY_TAB, QL_KEY_R, QL_KEY_MINUS, QL_KEY_Y, QL_KEY_O,
+    QL_KEY_L, QL_KEY_3, QL_KEY_H, QL_KEY_1, QL_KEY_A, QL_KEY_P, QL_KEY_D, QL_KEY_J,
+    QL_KEY_LBRACKET, QL_KEY_CAPSLOCK, QL_KEY_K, QL_KEY_S, QL_KEY_F, QL_KEY_EQUALS, QL_KEY_G, QL_KEY_SEMICOLON,
+    QL_KEY_RBRACKET, QL_KEY_Z, QL_KEY_PERIOD, QL_KEY_C, QL_KEY_B, QL_KEY_POUND, QL_KEY_M, QL_KEY_QUOTE,
+    QL_KEY_ENTER, QL_KEY_LEFT, QL_KEY_UP, QL_KEY_ESC, QL_KEY_RIGHT, QL_KEY_BACKSLASH, QL_KEY_SPACE, QL_KEY_DOWN,
+    QL_KEY_F4, QL_KEY_F1, QL_KEY_5, QL_KEY_F2, QL_KEY_F3, QL_KEY_F5, QL_KEY_4, QL_KEY_7,
+    QL_KEYS
+};
+
+/* A key down or up (from any task) */
 void ql_key(int key, bool down);
 /* Type text (\n is ENTER) a key at a time; false while still typing */
 bool ql_type(const char *text);

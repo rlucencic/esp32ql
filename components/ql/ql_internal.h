@@ -74,6 +74,12 @@ void ql_io_frame(void);                /* at the frame's start */
 int ql_io_irq_level(void);
 int ql_io_int_ack(int level);
 
+/* The IPC: keyboard, sound, serial input (ipc.c) */
+void ql_ipc_reset(void);
+void ql_ipc_write(uint8_t v);       /* $18003 */
+uint8_t ql_ipc_bit(void);           /* $18020 bit 7 */
+void ql_ipc_frame(void);            /* keys and typed text, at each frame's start */
+
 /* Sound (sound.c) */
 void ql_sound_reset(void);
 void ql_sound_level(int16_t level);

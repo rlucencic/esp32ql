@@ -15,18 +15,19 @@
 </p>
 
 <p align="center">
-  <b>Early development:</b> the QL boots to its F1/F2 (monitor/TV) question on both boards; the
-  keyboard, Microdrives and sound are being written now.
+  <b>Early development:</b> QDOS and SuperBASIC run with the keyboard on both boards; the
+  Microdrives and sound are being written now.
 </p>
 
 <p align="center">
-  <img alt="The QL's start-up question on the Tab5: F1...monitor, F2...TV, (c) 1983 Sinclair Research Ltd" src="docs/images/tab5-f1f2.png" width="49%">
-  <img alt="The same on the MaTouch's 1024 x 600 panel" src="docs/images/matouch-f1f2.png" width="49%">
+  <img alt="SuperBASIC in mode 8 on the Tab5: a FOR loop drawing 70 circles in the seven inks" src="docs/images/tab5-basic-circles.png" width="49%">
+  <img alt="SuperBASIC on the MaTouch: PRINT 2+2 typed in the command window, 4 in the output window" src="docs/images/matouch-basic-print.png" width="49%">
   <br>
+  <img alt="The QL's start-up question on the Tab5: F1...monitor, F2...TV, (c) 1983 Sinclair Research Ltd" src="docs/images/tab5-f1f2.png" width="49%">
   <img alt="The setup screen on the Tab5: ROM JS or Minerva, Memory 128 KB or 640 KB, Sound" src="docs/images/tab5-setup.png" width="49%">
   <br>
-  <sub>The JS ROM's start-up question on the Tab5 and the MaTouch (mode 8, 256 × 256), and the setup
-  screen. Screenshots from the boards.</sub>
+  <sub>SuperBASIC drawing circles in mode 8 (256 × 256, eight colours) on the Tab5, PRINT 2+2 on the
+  MaTouch, the JS ROM's start-up question and the setup screen. Screenshots from the boards.</sub>
 </p>
 
 esp32ql turns the Makerfabs MaTouch ESP32-S3 Parallel TFT with Touch 7", or an
@@ -61,15 +62,18 @@ core (Musashi) this one shares with the ST, the Macs and the Amiga.
 - Memory: the 48 KB ROM, 128 KB RAM, or 640 KB with a 512 KB expansion.
 - The ZX8301's display: mode 4 (512 × 256, four colours) and mode 8 (256 ×
   256, eight colours, flashing), the two screen banks, blanking.
-- The ZX8302's frame interrupt and its clock.
-- The JS ROM (QDOS 1.10) boots through its RAM test to the F1/F2 question on
-  both boards and the host build, at full speed (the Tab5's emulation core
-  ~21% busy, the MaTouch's ~64%).
+- The ZX8302's interrupts (frame, gap, interface, with their masks), its
+  clock and its link to the IPC.
+- The IPC (the 8049) at the protocol level: the keyboard (keys, SHIFT,
+  CTRL, ALT, QDOS's autorepeat, KEYROW) and its status.
+- The keyboard: Bluetooth and USB keyboards (the Tab5 Keyboard too) by
+  position, Backspace and Delete as the QL's CTRL + ← and CTRL + →.
+- The JS ROM (QDOS 1.10) and Minerva 1.98 boot to SuperBASIC on both boards
+  at full speed (the Tab5's emulation core ~22% busy, the MaTouch's ~64%);
+  an empty Microdrive answers "not found" for `mdv1_boot`.
 
-**Next**, in order: the IPC (the 8049: keyboard, sound) through the
-ZX8302's link, then SuperBASIC, the Microdrives (`.mdv` cartridge images),
-sound, Minerva, and original software (Psion Quill: a document saved and
-loaded again).
+**Next**, in order: the Microdrives (`.mdv` cartridge images), sound,
+and original software (Psion Quill: a document saved and loaded again).
 
 ## Hardware
 
@@ -96,6 +100,8 @@ cloned next to this repository.
    ```
 3. On the setup screen choose the ROM and memory and tap Start. The web page
    is at `http://sinclair-ql.local`.
+4. Answer the QL's question with F1 (monitor) or F2 (TV) on a Bluetooth or
+   USB keyboard; SuperBASIC follows.
 
 ## Development
 
@@ -107,7 +113,8 @@ make -C components/ql/host run          # 500 frames of the JS ROM, build/screen
 QL_IO=1 ./components/ql/host/build/ql_host roms/js.rom 200 out.ppm   # every I/O access
 ```
 
-`host_main.c` lists its other switches (traces, a stop at a PC, typed keys).
+`host_main.c` lists its other switches (traces, a stop at a PC, typed
+text, keys, memory dumps, disassembly of the ROM).
 
 ## Credits
 
