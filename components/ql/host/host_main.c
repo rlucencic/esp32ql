@@ -19,6 +19,8 @@
  *   QL_TRUMP=<rom>         a Trump Card with that ROM (floppy disks, Toolkit 2)
  *   QL_FLP1, QL_FLP2       its disk images (written: use copies)
  *   QL_WAV=<file>          the sound
+ *   QL_BEEP_EDGES=<8 bytes>[,r4,seed]  the beeper's edges for those INSO
+ *                          bytes (machine cycles from the first) and exit
  *   QL_DUMP=<addr>:<len>[;...]  memory in hex at the end (QDOS's system
  *                          variables are at $28000; $28068 the job table)
  *   QL_DASM=<addr>:<count> disassemble the ROM there and exit
@@ -172,8 +174,30 @@ int main(int argc, char **argv)
     size_t n = fread(rom, 1, sizeof(rom), f);
     fclose(f);
     printf("ROM %s: %zu bytes\n", argv[1], n);
+    if (getenv("QL_BEEP_EDGES")) {
+        extern int ql_beep_edges(const uint8_t p[8], uint8_t r4, uint16_t seed, uint32_t *cycles, int n);
+        unsigned v[10] = { 0 };
+        int got = sscanf(getenv("QL_BEEP_EDGES"), "%u,%u,%u,%u,%u,%u,%u,%u,%u,%u", &v[0], &v[1], &v[2], &v[3],
+                         &v[4], &v[5], &v[6], &v[7], &v[8], &v[9]);
+        if (got < 8) {
+            fprintf(stderr, "QL_BEEP_EDGES: 8 bytes\n");
+            return 1;
+        }
+        uint8_t p[8];
+        for (int i = 0; i < 8; i++) {
+            p[i] = v[i];
+        }
+        static uint32_t cycles[4000];
+        int n = ql_beep_edges(p, v[8], v[9], cycles, argc > 2 ? atoi(argv[2]) : 40);
+        for (int i = 0; i < n; i++) {
+            printf("%u\n", cycles[i]);
+        }
+        return 0;
+    }
     extern bool ql_debug_io;
     ql_debug_io = getenv("QL_IO") != NULL;
+    extern bool ql_debug_beep;
+    ql_debug_beep = getenv("QL_BEEP_LOG") != NULL;
     extern bool ql_debug_flp;
     ql_debug_flp = getenv("QL_FLP_LOG") != NULL;
     static uint8_t trump[QL_TRUMP_ROM_SIZE];

@@ -901,6 +901,16 @@ of 72 microseconds" [UG Keywords BEEP]: **not reproduced by the code**
 [UNCERTAIN; sQLux uses 43.64 us]. Nothing here was measured on a real
 QL; all timings are cycle counts.
 
+Later (2026-11-18, `tools/ipc_beep.py`): an 8049 interpreter running the
+listing's own instructions gives the routine's time exactly: 252 machine
+cycles for a plain `BEEP 0,p` (no duration: every half cycle a step that
+bounces), 307 with a duration, more with random or fuzzy (the random
+step's multiply loop varies with its bits), each path's sum of 1- and
+2-cycle instructions plus 3 for the interrupt (the instruction under way,
+the call). So `BEEP d,50` is 189.1 Hz, `BEEP 0,50` 194.6 Hz, and BEEP
+30000,50 lasts 1.40 s (the duration counted in half periods' ticks + 6:
+47 us a unit at this pitch). beep.c follows it edge for edge.
+
 ---
 
 ## 6. Microdrives

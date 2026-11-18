@@ -16,8 +16,8 @@
 </p>
 
 <p align="center">
-  <b>Early development:</b> QDOS, SuperBASIC, the keyboard, the Microdrives and floppy disks
-  work on both boards; sound is still to come.
+  <b>Early development:</b> QDOS, SuperBASIC, the keyboard, sound, the Microdrives and floppy
+  disks work on both boards.
 </p>
 
 <p align="center">
@@ -72,6 +72,11 @@ core (Musashi) this one shares with the ST, the Macs and the Amiga.
   clock and its link to the IPC.
 - The IPC (the 8049) at the protocol level: the keyboard (keys, SHIFT,
   CTRL, ALT, QDOS's autorepeat, KEYROW) and its status.
+- **Sound**: BEEP with all its parameters (pitch, a second pitch, steps,
+  wrap, random, fuzzy, duration), made as the IPC makes it: its timer
+  interrupt's routine, step by step and cycle by cycle, so pitches and
+  lengths come out as on a QL (`BEEP 0,50` is 189 Hz). Checked edge by edge
+  against the IPC's own code run in an 8049 interpreter.
 - The keyboard: Bluetooth and USB keyboards (the Tab5 Keyboard too) by
   position, Backspace and Delete as the QL's CTRL + ← and CTRL + →.
 - The JS ROM (QDOS 1.10) and Minerva 1.98 boot to SuperBASIC on both boards
@@ -98,7 +103,8 @@ core (Musashi) this one shares with the ST, the Macs and the Amiga.
   fields. `tools/mdvtool.py` does the same for a cartridge on the PC;
   `tools/mdvcheck.py` checks one.
 
-**Next**, in order: sound, the keyboard by hand, Minerva's differences.
+**Next**, in order: the keyboard by hand (Bluetooth and USB), Minerva's
+differences, more original software.
 
 ## Hardware
 

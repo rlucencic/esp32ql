@@ -103,9 +103,14 @@ uint8_t ql_flp_read8(uint32_t a);                   /* $1C000-$1C003 */
 void ql_flp_write8(uint32_t a, uint8_t v);          /* $1C000-$1C003, $1E000 */
 void ql_flp_status(uint8_t *light, uint8_t *track, uint32_t *reads, uint32_t *writes);
 
+/* The IPC's beeper (beep.c) */
+void ql_beep_reset(void);
+void ql_beep_start(const uint8_t params[8]);    /* command 10 */
+void ql_beep_stop(void);                        /* command 11 */
+bool ql_beep_on(void);                          /* the status's bit 1 */
+int16_t ql_beep_sample(uint64_t end);           /* a sample up to that clock */
+
 /* Sound (sound.c) */
-void ql_sound_reset(void);
-void ql_sound_level(int16_t level);
 void ql_sound_line(void);           /* two samples, at each line's end */
 
 /* ZX8301 display (video.c) */

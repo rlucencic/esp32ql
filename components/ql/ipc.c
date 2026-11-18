@@ -19,7 +19,7 @@
  *      (bit 0 ALT, 1 CTRL, 2 SHIFT) and a byte, its code (ql.h's QL_KEY_*)
  *   9  keyrow: a nibble (the row as KEYROW numbers it), 8 bits back
  *   6, 7  serial 1, 2 input: a count (none here)
- *   10 sound (64 bits of parameters), 11 sound off
+ *   10 sound (64 bits of parameters: eight bytes, beep.c), 11 sound off
  */
 #include <string.h>
 #include "ql_internal.h"
@@ -50,9 +50,6 @@ static volatile uint32_t s_ev_head, s_ev_tail;
 static char s_type[256];
 static volatile int s_type_pos, s_type_len;
 static int s_type_wait;
-
-/* Sound */
-static bool s_sound_on;
 
 /* The parameter bits each command takes */
 static int params_for(uint8_t command)
@@ -93,7 +90,7 @@ static void execute(void)
     s_reply_len = s_reply_pos = 0;
     switch (s_command) {
     case 1: {                           /* status */
-        uint8_t status = (s_fifo_n > 0 || s_held > 0 ? 0x01 : 0) | (s_sound_on ? 0x02 : 0);
+        uint8_t status = (s_fifo_n > 0 || s_held > 0 ? 0x01 : 0) | (ql_beep_on() ? 0x02 : 0);
         reply_bits(status, 8);
         break;
     }
@@ -116,11 +113,11 @@ static void execute(void)
         reply_bits(s_matrix[(7 - row) & 7], 8);
         break;
     }
-    case 10:                            /* sound: not there yet */
-        s_sound_on = false;
+    case 10:                            /* sound */
+        ql_beep_start(s_params);
         break;
     case 11:
-        s_sound_on = false;
+        ql_beep_stop();
         break;
     case 15:                            /* test: the byte back */
         reply_bits(s_params[0], 8);
@@ -139,7 +136,7 @@ void ql_ipc_reset(void)
     s_reply_len = s_reply_pos = 0;
     s_out = 0;
     s_fifo_n = 0;
-    s_sound_on = false;
+    ql_beep_reset();
 }
 
 /* A write to $18003 */

@@ -77,11 +77,13 @@ Memory 253, Floppy 313 (x 341, 626).
 | `components/ql/io.c` | On-board I/O at $18000: the ZX8302 (interrupts, the clock, the Microdrives' select and gap: empty drives so far), MODE |
 | `components/ql/ipc.c` | The IPC (8049) at the protocol level: the link, the commands, the keyboard matrix and queue, typed text |
 | `components/ql/sound.c` | The sound ring (two samples a line, 31250 Hz; it paces the emulation) |
+| `components/ql/beep.c` | The IPC's beeper: its timer interrupt's routine, with each path's machine cycles |
 | `components/ql/mdv.c` | The Microdrives: QLay images on a tape loop of gaps and records, the receiver and transmitter, writes back into the image |
 | `components/ql/flp.c` | The Trump Card's WD1772 and drive latch; 720 KB sector images (`.img`) |
 | `components/ql/host/` | Host build: `make -C components/ql/host run`, switches in host_main.c (`QL_IO=1` logs every I/O access) |
 | `tools/mdvcheck.py` | A QLay image's slots, syncs and checksums, sector numbers, the map, the directory |
 | `tools/mdvtool.py` | `ls`, `add`: files onto a QDOS-formatted cartridge image (from zips with their QDOS headers: executables keep their type and data space; blocks spaced along the tape as QDOS spaces them) |
+| `tools/ipc_beep.py` | beep.c against the IPC's own sound routine, run by a small 8049 interpreter from Venema's listing: `tools/ipc_beep.py ipc8049.txt [cases] [seed]` |
 | `tools/qlfiles_test.js` | qlfiles.js's test: `node tools/qlfiles_test.js [out folder] [x.zip ...]`: zips packed as the page does, both images read back and compared |
 | `docs/ql-hardware.md` | The hardware research (2026-11-18): every register, the IPC, the Microdrive, the boot, with sources |
 | `roms/` | The ROMs (not in git; README.md says where they come from) |
@@ -172,6 +174,27 @@ Memory 253, Floppy 313 (x 341, 626).
   "bad name", as the card's manual has boot files start with it);
   `FLP_USE mdv` makes MDV1_ mean FLP1_ (Quill's boot runs `EXEC_W
   MDV1_quill`).
+- **Sound** (`beep.c`; docs/ql-hardware.md 5, from Venema's annotated
+  IPC disassembly, IPC $0300-$0441): command 10 (INSO) brings eight bytes
+  (pitch 1, pitch 2, the interval and the duration low byte first, step
+  and wrap, random and fuzzy: BASIC's pitch + 1), 11 (KISO) turns it off;
+  status bit 1 is the sound on (QDOS copies it to SV.SOUND at each poll,
+  which BEEPING reads: it lags a BEEP by up to a poll, as on a QL). The
+  IPC's timer interrupt makes each half period: the duration and interval
+  counts (+ the half period + 6, or 4 without a duration), a step past
+  the interval (outside pitch 1 .. pitch 2 it starts again, wrap times or
+  for ever with 15, else turns round), random and fuzzy, the pin toggled,
+  the timer reloaded for the half period in ticks of 32 machine cycles
+  (the 8049 at 11 MHz: 733333 a second). A half period is those ticks plus
+  the routine's own time, which beep.c adds up branch by branch (from the
+  listing: 252 cycles for a plain BEEP, 307 with a duration): BEEP 30000,50
+  is 189.3 Hz for 1.40 s, BEEP 2000,1 993 Hz (recorded with `QL_WAV`).
+  `tools/ipc_beep.py` runs the listing's own instructions in an 8049
+  interpreter: every edge of 1511 parameter sets (300 edges each: steps,
+  wraps, bounces, random and fuzz, durations) equal. The pin through a
+  DC-blocking filter (a speaker's coupling) into the ring, two samples a
+  line, each the pin's average over it. ~1% of the Tab5's core 1 while it
+  plays (profile); the Tab5 and the MaTouch at 100% with a sweeping BEEP.
 - **The web page's packer** (`main/web/qlfiles.js`, esp32emu's
   `registerPacker`): files dropped on the page (loose, in folders, in zips)
   go onto a new cartridge (`<name>.mdv`, when they fit in its 254 sectors)
@@ -262,6 +285,18 @@ Memory 253, Floppy 313 (x 341, 626).
   LOAD and EXEC read a whole file in any order, so Quill itself loaded
   fine. QDOS puts each next block 13 slots further on (the collection's
   cartridges): mdvtool does too now (the same COPY in ~70 s).
+- **A beep's pitch is the IPC's routine time too**: the timer is loaded
+  with the half period's ticks only after the interrupt routine has run
+  its course, so its 252 machine cycles or more (by path) add to every
+  half period: without them BEEP 0,50 would be 224 Hz, not 189. The listing
+  counted per branch got them right, all but two (a JZ that leaves before
+  the JC after it, a DEC a negative step skips): the 8049 interpreter
+  running the listing found both in the first 300 cases.
+- **A console test types into whatever booted**: the boards keep their
+  drives, so F1 started Quill from MDV1_ (or FLP1_) and a typed BEEP went
+  into Quill: the first "beeping" load and profile were of a silent
+  machine. Empty the drives through the web API first (`curl -X DELETE
+  .../api/drive/1`), and put them back.
 - **The page dropped a zip's extra fields**: the QL's zips keep each
   file's QDOS header there, so an executable from a zip lost its type and
   data space on the way to the packer (Quill would have become a data
@@ -300,6 +335,10 @@ Memory 253, Floppy 313 (x 341, 626).
   `QL_FLP_LOG=1` prints each WD1772 command and the IDs a Write Track
   writes. Quill on a disk: `TK2_EXT`, `WCOPY mdv1_ TO flp1_`, `A`; its boot
   needs `FLP_USE mdv` first, or its line 8 as `EXEC_W flp1_quill`.
+- Sound on the host: `QL_BEEP_LOG=1` prints each INSO's eight bytes and
+  KISO, `QL_WAV=out.wav` records (BEEP 30000,50 at frame 600: 189.3 Hz);
+  `QL_BEEP_EDGES=p1,p2,...` prints beep.c's edges alone; `tools/ipc_beep.py
+  <ipc8049.txt>` compares them with the IPC's code.
 - The web page's packer: `node tools/qlfiles_test.js out qui235m.zip`
   writes `out/qui235m.mdv` and `.img` (to boot with `QL_MDV1`, `QL_FLP1`).
 - Microdrives on the boards: upload the image (`curl -T x.mdv
