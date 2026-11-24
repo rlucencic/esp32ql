@@ -186,6 +186,10 @@ QL_IO=1 ./components/ql/host/build/ql_host roms/js.rom 200 out.ppm   # every I/O
 `host_main.c` lists its other switches (traces, a stop at a PC, typed
 text, keys, memory dumps, disassembly of the ROM).
 
+## Roadmap
+
+See [TODO.md](TODO.md) for proposed work and how to verify it.
+
 ## Credits
 
 - The 68000 core: [Musashi](https://github.com/kstenerud/Musashi) by Karl
